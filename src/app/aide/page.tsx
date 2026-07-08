@@ -21,13 +21,15 @@ export default function AidePage() {
           <li>
             Menu de partage (iPhone) ou menu ⋮ (Android) → <strong>« Ajouter à l&apos;écran d&apos;accueil »</strong>.
           </li>
-          <li>Une icône « Caisse CAMP » apparaît sur l&apos;écran d&apos;accueil, comme une vraie application.</li>
+          <li>
+            Une icône « Caisse_événement » apparaît sur l&apos;écran d&apos;accueil, comme une vraie application.
+          </li>
         </ol>
       </Section>
 
       <Section title="2. Ajouter un ticket">
         <ol className="list-decimal space-y-1 pl-5">
-          <li>À l&apos;ouverture, choisir son nom (Alex / Collègue).</li>
+          <li>À l&apos;ouverture, choisir son nom (Alex / Kilian).</li>
           <li>
             La première fois, entrer le <strong>code d&apos;accès</strong> de l&apos;événement (donné par le
             responsable) — à faire une seule fois par téléphone.
