@@ -271,4 +271,18 @@ begin
   ) then
     alter publication supabase_realtime add table public.ticket_items;
   end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'events'
+  ) then
+    alter publication supabase_realtime add table public.events;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'vendeurs'
+  ) then
+    alter publication supabase_realtime add table public.vendeurs;
+  end if;
 end $$;

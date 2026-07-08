@@ -1,6 +1,6 @@
 {
-  "name": "Caisse événementielle C.A.M.P. France",
-  "short_name": "Caisse CAMP",
+  "name": "Caisse_événement",
+  "short_name": "Caisse_événement",
   "description": "Saisie des ventes sur stand événementiel C.A.M.P. France",
   "start_url": "/nouveau",
   "scope": "/",
