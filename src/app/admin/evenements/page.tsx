@@ -11,6 +11,8 @@ export default function EvenementsPage() {
   const [loading, setLoading] = useState(true);
   const [nom, setNom] = useState("");
   const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   const load = useCallback(async () => {
     const { data } = await supabaseBrowser.from("events").select("*").order("created_at", { ascending: false });
@@ -57,6 +59,24 @@ export default function EvenementsPage() {
     }
   }
 
+  async function renameEvent(id: string) {
+    if (!editValue.trim()) return;
+    try {
+      const res = await fetch(`/api/events/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nom: editValue }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error);
+      setEditingId(null);
+      await load();
+      toast.success("Événement renommé");
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-md space-y-6 p-4">
       <h1 className="text-lg font-bold">Événements</h1>
@@ -89,19 +109,52 @@ export default function EvenementsPage() {
           {events.map((ev) => (
             <li
               key={ev.id}
-              className="flex items-center justify-between rounded-lg border border-black/10 bg-white p-3"
+              className="flex items-center justify-between gap-2 rounded-lg border border-black/10 bg-white p-3"
             >
-              <div>
-                <p className="font-medium">{ev.nom}</p>
-                {ev.is_active && <span className="text-xs font-semibold text-brand">Actif</span>}
-              </div>
-              {!ev.is_active && (
-                <button
-                  onClick={() => activate(ev.id)}
-                  className="rounded-md border border-black/15 px-3 py-1.5 text-xs font-medium"
-                >
-                  Activer
-                </button>
+              {editingId === ev.id ? (
+                <div className="flex flex-1 gap-2">
+                  <input
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    className="flex-1 rounded-lg border border-black/15 px-2 py-1.5 text-sm"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => renameEvent(ev.id)}
+                    className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white"
+                  >
+                    Valider
+                  </button>
+                  <button onClick={() => setEditingId(null)} className="px-2 text-xs text-black/50">
+                    Annuler
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{ev.nom}</p>
+                    {ev.is_active && <span className="text-xs font-semibold text-brand">Actif</span>}
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingId(ev.id);
+                        setEditValue(ev.nom);
+                      }}
+                      className="rounded-md border border-black/15 px-3 py-1.5 text-xs font-medium"
+                    >
+                      Renommer
+                    </button>
+                    {!ev.is_active && (
+                      <button
+                        onClick={() => activate(ev.id)}
+                        className="rounded-md border border-black/15 px-3 py-1.5 text-xs font-medium"
+                      >
+                        Activer
+                      </button>
+                    )}
+                  </div>
+                </>
               )}
             </li>
           ))}
