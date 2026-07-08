@@ -29,7 +29,7 @@ export default function AidePage() {
 
       <Section title="2. Ajouter un ticket">
         <ol className="list-decimal space-y-1 pl-5">
-          <li>À l&apos;ouverture, choisir son nom (Alex / Kilian).</li>
+          <li>À l&apos;ouverture, choisir son prénom dans la liste des vendeurs de l&apos;événement.</li>
           <li>
             La première fois, entrer le <strong>code d&apos;accès</strong> de l&apos;événement (donné par le
             responsable) — à faire une seule fois par téléphone.
@@ -45,8 +45,8 @@ export default function AidePage() {
           <li>Choisir le mode de paiement : CB, CB sans contact, Espèces ou Chèque.</li>
           <li>Toucher « Valider le ticket ».</li>
           <li>
-            Le <strong>numéro de ticket</strong> et le <strong>montant</strong> s&apos;affichent en grand — à noter au
-            dos du reçu CB si besoin.
+            Le <strong>numéro de ticket</strong> et le <strong>montant</strong>{" "}
+            s&apos;affichent en grand — à noter au dos du reçu CB si besoin.
           </li>
         </ol>
       </Section>
