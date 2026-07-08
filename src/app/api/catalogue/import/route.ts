@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { parseSpreadsheet, buildCatalogueItems } from "@/lib/catalogueParser";
+import { isAdminRequest } from "@/lib/adminAuth";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  if (!(await isAdminRequest(req))) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
+
   const formData = await req.formData();
   const file = formData.get("file");
   const event_id = formData.get("event_id");

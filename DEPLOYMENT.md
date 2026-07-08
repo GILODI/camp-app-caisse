@@ -36,13 +36,14 @@ git push -u origin master
 1. Va sur [vercel.com](https://vercel.com) et connecte-toi (avec ton compte GitHub).
 2. Clique sur **Add New… → Project**.
 3. Choisis le dépôt GitHub **camp-app-caisse** dans la liste, puis **Import**.
-4. Avant de cliquer sur Deploy, ouvre la section **Environment Variables** et ajoute les 3 valeurs récupérées à l'étape 1 :
+4. Avant de cliquer sur Deploy, ouvre la section **Environment Variables** et ajoute ces valeurs (coche Production + Preview pour chacune) :
 
    | Nom de la variable | Valeur |
    |---|---|
    | `NEXT_PUBLIC_SUPABASE_URL` | ton Project URL |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ta clé anon public |
    | `SUPABASE_SERVICE_ROLE_KEY` | ta clé service_role |
+   | `ADMIN_PASSWORD` | un mot de passe de ton choix, pour protéger l'espace Admin (`/admin`) |
 
 5. Clique sur **Deploy**. Après 1 à 2 minutes, Vercel te donne une URL du type `https://camp-app-caisse.vercel.app` — c'est le lien à partager avec les vendeurs.
 
@@ -54,25 +55,31 @@ git push -u origin master
 
 À faire quelques jours avant chaque événement, une fois l'app en ligne.
 
+### 0. Se connecter à l'espace Admin
+
+Va sur `https://camp-app-caisse.vercel.app/admin` et entre le mot de passe choisi à l'étape précédente (`ADMIN_PASSWORD`). Cette connexion reste valable 30 jours sur cet appareil.
+
 ### 1. Créer et activer l'événement
 
-1. Ouvre l'app → onglet **Admin** (en haut à droite) → **Événements & vendeurs**.
-2. Dans « Nouvel événement », tape le nom (ex. « Coupe du monde Chamonix 2026 ») → **Créer**.
+1. Onglet **Admin → Événements & vendeurs**.
+2. Dans « Nouvel événement », tape le nom (ex. « Coupe du monde Chamonix 2026 ») → **Créer**. Un code d'accès à 6 caractères est généré automatiquement.
 3. Clique sur **Activer** à côté de cet événement. Un seul événement peut être actif à la fois — c'est celui que les vendeurs verront.
 
-### 2. Ajouter les vendeurs
+### 2. Ajouter les vendeurs et communiquer le code
 
-Toujours sur cette page, section « Vendeurs de l'événement actif » : tape un prénom (ex. « Alex ») → **Ajouter**. Répète pour chaque vendeur (ex. « Collègue »).
+1. Toujours sur cette page, section « Vendeurs de l'événement actif » : tape un prénom (ex. « Alex ») → **Ajouter**. Répète pour chaque vendeur.
+2. Note le **code d'accès** affiché à côté du nom de l'événement (ex. `K7XPQ2`) et transmets-le uniquement aux vendeurs de cet événement (SMS, oral...). Sans ce code, impossible pour eux d'ouvrir les écrans de vente.
+3. Une fois l'événement terminé, clique sur **Nouveau code** pour invalider l'ancien — utile si tu ne veux pas qu'un vendeur ponctuel garde accès aux événements suivants.
 
 ### 3. Importer le catalogue
 
 1. Onglet **Admin → Catalogue**.
-2. Choisis le fichier `[TEMPLATE] Referentiel Stand — CAMP.xlsx` de l'événement (onglet Catalogue), ou à défaut un CSV avec les colonnes Référence / Désignation / Catégorie / Prix.
-3. L'app propose automatiquement une correspondance de colonnes — vérifie que « Prix TTC remisé » pointe bien vers la bonne colonne (celle du prix déjà remisé, pas le prix public).
+2. Choisis le fichier `[TEMPLATE] Referentiel Stand — CAMP.xlsx` de l'événement (onglet Catalogue), ou à défaut un CSV avec les colonnes Référence / Désignation / Prix remisé.
+3. L'app propose automatiquement une correspondance de colonnes — vérifie que « Prix remisé » pointe bien vers la colonne du prix réellement facturé (pas le prix public). La colonne PVP TTC (prix avant remise) est optionnelle, utile pour voir la remise accordée dans l'export.
 4. Choisis **« Ajouter / mettre à jour »** (si c'est un complément) ou **« Remplacer tout le catalogue »** (si c'est une nouvelle version complète du fichier).
 5. Clique sur **Confirmer l'import**.
 
-L'app est prête : chaque vendeur peut maintenant ouvrir le lien, choisir son nom, et vendre.
+L'app est prête : chaque vendeur ouvre le lien, choisit son nom, entre le code d'accès (une seule fois par appareil), et peut vendre.
 
 ---
 
@@ -85,6 +92,7 @@ Onglet **Ventes du jour → Exporter** (ou **Admin → Export fin de journée** 
 ## Problèmes fréquents
 
 - **« Aucun événement actif »** : personne n'a encore activé d'événement — voir Partie B, étape 1.
+- **« Code d'accès requis »** : normal, c'est la protection par événement — donne le code au vendeur (Admin → Événements & vendeurs).
 - **Recherche produit vide** : le catalogue n'a pas été importé pour cet événement — voir Partie B, étape 3.
 - **La page ne s'affiche pas / erreur** : vérifie que les 3 variables d'environnement sont bien renseignées dans Vercel (Project Settings → Environment Variables), puis redéploie (Vercel → Deployments → ⋯ → Redeploy).
 - **Un vendeur n'a pas de réseau une seconde en pleine saisie** : pas d'action à faire, l'app retente l'envoi automatiquement (voir la fiche mémo, onglet Aide).

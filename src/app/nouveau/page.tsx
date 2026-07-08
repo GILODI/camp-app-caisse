@@ -11,26 +11,62 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductAutocomplete } from "@/components/ProductAutocomplete";
 import { TicketLinesEditor } from "@/components/TicketLinesEditor";
 import { PaymentMethodPicker } from "@/components/PaymentMethodPicker";
-import type { CatalogueItem, DraftLine, PaymentMethod, TicketWithItems } from "@/lib/types";
+import { EventCodeGate } from "@/components/EventCodeGate";
+import type { CatalogueItem, DraftLine, EventRow, PaymentMethod, TicketWithItems } from "@/lib/types";
 
 function NouveauTicketContent() {
   const { event, loading: eventLoading } = useActiveEvent();
-  const { items: catalogue } = useCatalogue(event?.id);
+  const [vendeur, setVendeur] = useState<string | null>(null);
+
+  useEffect(() => {
+    setVendeur(getStoredVendeur());
+  }, []);
+
+  if (eventLoading) return <p className="p-6 text-center text-black/50">Chargement…</p>;
+
+  if (!event) {
+    return (
+      <div className="mx-auto max-w-md space-y-3 p-6 text-center">
+        <p className="font-semibold">Aucun événement actif.</p>
+        <Link href="/admin/evenements" className="underline">
+          Configurer un événement
+        </Link>
+      </div>
+    );
+  }
+
+  if (!vendeur) {
+    return (
+      <div className="mx-auto max-w-md space-y-3 p-6 text-center">
+        <p className="font-semibold">Choisis d&apos;abord ton nom.</p>
+        <Link href="/" className="inline-block rounded-lg bg-brand px-5 py-3 font-semibold text-white">
+          Choisir un vendeur
+        </Link>
+      </div>
+    );
+  }
+
+  // Catalogue et tickets ne sont chargés qu'une fois le code d'accès validé
+  // (voir EventCodeGate) — pas de données de vente/tarifs avant déverrouillage.
+  return (
+    <EventCodeGate eventId={event.id}>
+      <NouveauTicketForm event={event} vendeur={vendeur} />
+    </EventCodeGate>
+  );
+}
+
+function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: string }) {
+  const { items: catalogue } = useCatalogue(event.id);
   const router = useRouter();
   const searchParams = useSearchParams();
   const correctId = searchParams.get("correct");
 
-  const [vendeur, setVendeur] = useState<string | null>(null);
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [mode, setMode] = useState<PaymentMethod | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [pendingLocalId, setPendingLocalId] = useState<string | null>(null);
   const [result, setResult] = useState<TicketResult | null>(null);
   const [correctingSource, setCorrectingSource] = useState<TicketWithItems | null>(null);
-
-  useEffect(() => {
-    setVendeur(getStoredVendeur());
-  }, []);
 
   useEffect(() => {
     if (!correctId) return;
@@ -112,7 +148,7 @@ function NouveauTicketContent() {
   }
 
   async function handleSubmit() {
-    if (!event || !vendeur || !mode || lines.length === 0) return;
+    if (!mode || lines.length === 0) return;
     setSubmitting(true);
 
     const payload = {
@@ -158,30 +194,6 @@ function NouveauTicketContent() {
     } else {
       toast.error(outcome.message);
     }
-  }
-
-  if (eventLoading) return <p className="p-6 text-center text-black/50">Chargement…</p>;
-
-  if (!event) {
-    return (
-      <div className="mx-auto max-w-md space-y-3 p-6 text-center">
-        <p className="font-semibold">Aucun événement actif.</p>
-        <Link href="/admin/evenements" className="underline">
-          Configurer un événement
-        </Link>
-      </div>
-    );
-  }
-
-  if (!vendeur) {
-    return (
-      <div className="mx-auto max-w-md space-y-3 p-6 text-center">
-        <p className="font-semibold">Choisis d&apos;abord ton nom.</p>
-        <Link href="/" className="inline-block rounded-lg bg-brand px-5 py-3 font-semibold text-white">
-          Choisir un vendeur
-        </Link>
-      </div>
-    );
   }
 
   if (result) {

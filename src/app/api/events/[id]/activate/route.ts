@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { isAdminRequest } from "@/lib/adminAuth";
 
 export const runtime = "nodejs";
 
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await isAdminRequest(req))) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
+
   const { id } = await params;
 
   const { error: deactivateError } = await supabaseServer

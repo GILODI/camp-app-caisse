@@ -1,23 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { isAdminRequest } from "@/lib/adminAuth";
+import { generateAccessCode } from "@/lib/accessCode";
 
 export const runtime = "nodejs";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const body = await req.json().catch(() => ({}));
-  const nom = (body.nom ?? "").trim();
-
-  if (!nom) {
-    return NextResponse.json({ error: "Nom requis" }, { status: 400 });
+  if (!(await isAdminRequest(req))) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 
-  const { data, error } = await supabaseServer
-    .from("events")
-    .update({ nom })
-    .eq("id", id)
-    .select()
-    .single();
+  const { id } = await params;
+  const body = await req.json().catch(() => ({}));
+
+  const update: { nom?: string; code_acces?: string } = {};
+  if (typeof body.nom === "string" && body.nom.trim()) update.nom = body.nom.trim();
+  if (body.regenerate_code === true) update.code_acces = generateAccessCode();
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: "Rien à mettre à jour" }, { status: 400 });
+  }
+
+  const { data, error } = await supabaseServer.from("events").update(update).eq("id", id).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);

@@ -14,6 +14,9 @@ export interface EventRow {
   nom: string;
   is_active: boolean;
   created_at: string;
+  // Présent uniquement quand récupéré via une requête admin (jamais exposé
+  // aux écrans vendeur publics) — voir src/lib/hooks.ts useActiveEvent.
+  code_acces?: string;
 }
 
 export interface Vendeur {

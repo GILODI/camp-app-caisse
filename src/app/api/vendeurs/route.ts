@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { isAdminRequest } from "@/lib/adminAuth";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  if (!(await isAdminRequest(req))) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
+
   const body = await req.json().catch(() => ({}));
   const event_id = body.event_id as string | undefined;
   const nom = (body.nom ?? "").trim();

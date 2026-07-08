@@ -28,6 +28,10 @@ export default function AidePage() {
       <Section title="2. Ajouter un ticket">
         <ol className="list-decimal space-y-1 pl-5">
           <li>À l&apos;ouverture, choisir son nom (Alex / Collègue).</li>
+          <li>
+            La première fois, entrer le <strong>code d&apos;accès</strong> de l&apos;événement (donné par le
+            responsable) — à faire une seule fois par téléphone.
+          </li>
           <li>Onglet « Nouveau » → rechercher un produit par référence ou nom.</li>
           <li>Toucher le produit pour l&apos;ajouter, ajuster la quantité avec + / −.</li>
           <li>Le total se met à jour automatiquement à chaque ligne.</li>

@@ -13,6 +13,10 @@ create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
   nom text not null,
   is_active boolean not null default false,
+  -- Code donné aux vendeurs pour accéder aux écrans de vente de CET
+  -- événement (voir EventCodeGate côté app) ; jamais exposé aux hooks
+  -- publics, uniquement lu côté serveur ou depuis l'espace Admin protégé.
+  code_acces text,
   created_at timestamptz not null default now()
 );
 

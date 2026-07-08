@@ -10,7 +10,13 @@ export function useActiveEvent() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const { data } = await supabaseBrowser.from("events").select("*").eq("is_active", true).maybeSingle();
+    // Colonnes explicites : ne jamais inclure code_acces ici, ce hook est
+    // utilisé par les écrans vendeur publics (voir EventCodeGate).
+    const { data } = await supabaseBrowser
+      .from("events")
+      .select("id,nom,is_active,created_at")
+      .eq("is_active", true)
+      .maybeSingle();
     setEvent(data ?? null);
     setLoading(false);
   }, []);

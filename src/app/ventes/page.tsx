@@ -5,18 +5,15 @@ import Link from "next/link";
 import { useActiveEvent, useTodaySales } from "@/lib/hooks";
 import { getStoredVendeur } from "@/lib/currentVendeur";
 import { SalesList } from "@/components/SalesList";
+import { EventCodeGate } from "@/components/EventCodeGate";
+import { getUnlockedCode } from "@/lib/eventLock";
 import { formatDateFR } from "@/lib/date";
+import type { EventRow } from "@/lib/types";
 
 export default function VentesDuJourPage() {
   const { event, loading: eventLoading } = useActiveEvent();
-  const { tickets, loading, venteDate } = useTodaySales(event?.id);
-  const [vendeur, setVendeur] = useState<string | null>(null);
 
-  useEffect(() => {
-    setVendeur(getStoredVendeur());
-  }, []);
-
-  if (eventLoading || loading) return <p className="p-6 text-center text-black/50">Chargement…</p>;
+  if (eventLoading) return <p className="p-6 text-center text-black/50">Chargement…</p>;
 
   if (!event) {
     return (
@@ -25,6 +22,24 @@ export default function VentesDuJourPage() {
       </div>
     );
   }
+
+  // Les ventes ne sont chargées qu'une fois le code d'accès validé.
+  return (
+    <EventCodeGate eventId={event.id}>
+      <VentesContent event={event} />
+    </EventCodeGate>
+  );
+}
+
+function VentesContent({ event }: { event: EventRow }) {
+  const { tickets, loading, venteDate } = useTodaySales(event.id);
+  const [vendeur, setVendeur] = useState<string | null>(null);
+
+  useEffect(() => {
+    setVendeur(getStoredVendeur());
+  }, []);
+
+  if (loading) return <p className="p-6 text-center text-black/50">Chargement…</p>;
 
   const valides = tickets.filter((t) => t.statut === "VALIDE");
   const totalCA = valides.reduce((sum, t) => sum + Number(t.total_ttc), 0);
@@ -40,7 +55,7 @@ export default function VentesDuJourPage() {
           </p>
         </div>
         <a
-          href={`/api/export?event_id=${event.id}&date=${venteDate}`}
+          href={`/api/export?event_id=${event.id}&date=${venteDate}&code=${encodeURIComponent(getUnlockedCode(event.id) ?? "")}`}
           className="rounded-lg border border-black/15 px-3 py-2 text-sm font-medium"
         >
           Exporter

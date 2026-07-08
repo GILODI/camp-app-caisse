@@ -77,6 +77,22 @@ export default function EvenementsPage() {
     }
   }
 
+  async function regenerateCode(id: string) {
+    try {
+      const res = await fetch(`/api/events/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ regenerate_code: true }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error);
+      await load();
+      toast.success("Nouveau code généré — les appareils déjà déverrouillés devront le ressaisir");
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-md space-y-6 p-4">
       <h1 className="text-lg font-bold">Événements</h1>
@@ -133,9 +149,16 @@ export default function EvenementsPage() {
                 <>
                   <div className="min-w-0">
                     <p className="truncate font-medium">{ev.nom}</p>
-                    {ev.is_active && <span className="text-xs font-semibold text-brand">Actif</span>}
+                    <div className="flex items-center gap-2">
+                      {ev.is_active && <span className="text-xs font-semibold text-brand">Actif</span>}
+                      {ev.code_acces && (
+                        <span className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-xs tracking-widest">
+                          {ev.code_acces}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex shrink-0 gap-2">
+                  <div className="flex shrink-0 flex-wrap justify-end gap-2">
                     <button
                       onClick={() => {
                         setEditingId(ev.id);
@@ -144,6 +167,12 @@ export default function EvenementsPage() {
                       className="rounded-md border border-black/15 px-3 py-1.5 text-xs font-medium"
                     >
                       Renommer
+                    </button>
+                    <button
+                      onClick={() => regenerateCode(ev.id)}
+                      className="rounded-md border border-black/15 px-3 py-1.5 text-xs font-medium"
+                    >
+                      Nouveau code
                     </button>
                     {!ev.is_active && (
                       <button
@@ -160,6 +189,11 @@ export default function EvenementsPage() {
           ))}
         </ul>
       )}
+
+      <p className="text-xs text-black/40">
+        Le code d&apos;accès de l&apos;événement actif est à donner aux vendeurs pour qu&apos;ils puissent utiliser
+        l&apos;app. Régénère-le pour couper l&apos;accès à un ancien code (ex. à la fin d&apos;un événement).
+      </p>
 
       {activeEvent && <VendeursManager eventId={activeEvent.id} />}
     </div>
