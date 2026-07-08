@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useVendeurs } from "@/lib/hooks";
+import { generateAccessCode } from "@/lib/accessCode";
 import type { EventRow } from "@/lib/types";
 
 export default function EvenementsPage() {
@@ -13,6 +14,8 @@ export default function EvenementsPage() {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [editingCodeId, setEditingCodeId] = useState<string | null>(null);
+  const [codeValue, setCodeValue] = useState("");
 
   const load = useCallback(async () => {
     const { data } = await supabaseBrowser.from("events").select("*").order("created_at", { ascending: false });
@@ -77,17 +80,19 @@ export default function EvenementsPage() {
     }
   }
 
-  async function regenerateCode(id: string) {
+  async function saveCode(id: string) {
+    if (!codeValue.trim()) return;
     try {
       const res = await fetch(`/api/events/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ regenerate_code: true }),
+        body: JSON.stringify({ code_acces: codeValue }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error);
+      setEditingCodeId(null);
       await load();
-      toast.success("Nouveau code généré — les appareils déjà déverrouillés devront le ressaisir");
+      toast.success("Code mis à jour — les appareils déjà déverrouillés devront le ressaisir");
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -145,6 +150,33 @@ export default function EvenementsPage() {
                     Annuler
                   </button>
                 </div>
+              ) : editingCodeId === ev.id ? (
+                <div className="flex flex-1 flex-wrap items-center gap-2">
+                  <input
+                    value={codeValue}
+                    onChange={(e) => setCodeValue(e.target.value.toUpperCase())}
+                    placeholder="Ex : CHAM26"
+                    className="flex-1 rounded-lg border border-black/15 px-2 py-1.5 font-mono text-sm uppercase tracking-widest"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCodeValue(generateAccessCode())}
+                    className="rounded-md border border-black/15 px-2 py-1.5 text-xs"
+                    title="Générer un code aléatoire"
+                  >
+                    🎲
+                  </button>
+                  <button
+                    onClick={() => saveCode(ev.id)}
+                    className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white"
+                  >
+                    Valider
+                  </button>
+                  <button onClick={() => setEditingCodeId(null)} className="px-2 text-xs text-black/50">
+                    Annuler
+                  </button>
+                </div>
               ) : (
                 <>
                   <div className="min-w-0">
@@ -169,10 +201,13 @@ export default function EvenementsPage() {
                       Renommer
                     </button>
                     <button
-                      onClick={() => regenerateCode(ev.id)}
+                      onClick={() => {
+                        setEditingCodeId(ev.id);
+                        setCodeValue(ev.code_acces ?? generateAccessCode());
+                      }}
                       className="rounded-md border border-black/15 px-3 py-1.5 text-xs font-medium"
                     >
-                      Nouveau code
+                      Modifier le code
                     </button>
                     {!ev.is_active && (
                       <button
@@ -192,7 +227,8 @@ export default function EvenementsPage() {
 
       <p className="text-xs text-black/40">
         Le code d&apos;accès de l&apos;événement actif est à donner aux vendeurs pour qu&apos;ils puissent utiliser
-        l&apos;app. Régénère-le pour couper l&apos;accès à un ancien code (ex. à la fin d&apos;un événement).
+        l&apos;app. Tu peux le personnaliser (facile à retenir) ou en tirer un aléatoire avec 🎲. Modifie-le pour
+        couper l&apos;accès à un ancien code (ex. à la fin d&apos;un événement).
       </p>
 
       {activeEvent && <VendeursManager eventId={activeEvent.id} />}
