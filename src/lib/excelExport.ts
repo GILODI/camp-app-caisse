@@ -1,7 +1,8 @@
 import ExcelJS from "exceljs";
-import type { PaymentMethod, TicketWithItems } from "./types";
-import { PAYMENT_METHODS } from "./types";
-import { formatDateFR } from "./date";
+import type { CaisseComptage, PaymentMethod, TicketWithItems } from "./types";
+import { DENOMINATIONS, PAYMENT_METHODS } from "./types";
+import type { CaisseRow } from "./caisseCalc";
+import { formatDateFR, formatDateTimeFR } from "./date";
 
 const CURRENCY_FMT = '#,##0.00 "€"';
 
@@ -39,6 +40,10 @@ export function sanitizeFilenamePart(input: string): string {
 
 export function buildExportFilename(eventNom: string, venteDate: string): string {
   return `Caisse_${sanitizeFilenamePart(eventNom)}_${venteDate}.xlsx`;
+}
+
+export function buildCaisseExportFilename(eventNom: string): string {
+  return `Decompte_Caisse_Especes_${sanitizeFilenamePart(eventNom)}.xlsx`;
 }
 
 function styleHeaderRow(row: ExcelJS.Row) {
@@ -232,4 +237,98 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
   }
 
   sheet.autoFilter = { from: "A1", to: "L1" };
+}
+
+export async function generateCaisseExport(
+  eventNom: string,
+  rows: CaisseRow[],
+  comptages: CaisseComptage[]
+): Promise<ExcelJS.Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Caisse événementielle C.A.M.P. France";
+  workbook.created = new Date();
+
+  buildCaisseSyntheseSheet(workbook, eventNom, rows);
+  buildCaisseDetailSheet(workbook, comptages);
+
+  return workbook.xlsx.writeBuffer();
+}
+
+function buildCaisseSyntheseSheet(workbook: ExcelJS.Workbook, eventNom: string, rows: CaisseRow[]) {
+  const sheet = workbook.addWorksheet("Synthèse caisse");
+  sheet.columns = [{ width: 20 }, { width: 18 }, { width: 18 }, { width: 20 }, { width: 14 }];
+
+  sheet.mergeCells("A1:E1");
+  const titleCell = sheet.getCell("A1");
+  titleCell.value = `Suivi caisse espèces — ${eventNom}`;
+  titleCell.font = { bold: true, size: 14 };
+  sheet.getRow(1).height = 24;
+
+  const header = sheet.addRow([
+    "Comptage",
+    "Total compté (€)",
+    "Recette du jour (€)",
+    "Espèces déclarées (€)",
+    "Écart (€)",
+  ]);
+  styleHeaderRow(header);
+
+  let totalRecette = 0;
+  let totalEspeces = 0;
+  let totalEcart = 0;
+
+  for (const r of rows) {
+    const row = sheet.addRow([r.label, r.total, r.recette, r.especes, r.ecart]);
+    row.getCell(2).numFmt = CURRENCY_FMT;
+    if (r.recette !== null) row.getCell(3).numFmt = CURRENCY_FMT;
+    if (r.especes !== null) row.getCell(4).numFmt = CURRENCY_FMT;
+    if (r.ecart !== null) row.getCell(5).numFmt = CURRENCY_FMT;
+    row.eachCell((cell) => (cell.border = THIN_BORDER));
+    if (r.ecart !== null && Math.abs(r.ecart) > 0.01) {
+      row.getCell(5).font = { color: { argb: "FFCC0000" }, bold: true };
+    }
+    totalRecette += r.recette ?? 0;
+    totalEspeces += r.especes ?? 0;
+    totalEcart += r.ecart ?? 0;
+  }
+
+  const totalRow = sheet.addRow(["TOTAL ÉVÉNEMENT", null, totalRecette, totalEspeces, totalEcart]);
+  totalRow.getCell(3).numFmt = CURRENCY_FMT;
+  totalRow.getCell(4).numFmt = CURRENCY_FMT;
+  totalRow.getCell(5).numFmt = CURRENCY_FMT;
+  styleTotalRow(totalRow);
+}
+
+function buildCaisseDetailSheet(workbook: ExcelJS.Workbook, comptages: CaisseComptage[]) {
+  const sheet = workbook.addWorksheet("Détail comptages");
+  const centered = { alignment: { horizontal: "center" as const } };
+
+  sheet.columns = [
+    { header: "Comptage", key: "label", width: 18 },
+    ...DENOMINATIONS.map((d) => ({ header: d.label, key: d.key, width: 12, style: centered })),
+    { header: "Total compté (€)", key: "total", width: 16 },
+    { header: "Saisi par", key: "by", width: 16 },
+    { header: "Dernière mise à jour", key: "updated", width: 20 },
+  ];
+  styleHeaderRow(sheet.getRow(1));
+
+  const initial = comptages.find((c) => c.type === "initial") ?? null;
+  const jours = comptages
+    .filter((c) => c.type === "jour" && c.comptage_date)
+    .sort((a, b) => (a.comptage_date! < b.comptage_date! ? -1 : 1));
+  const ordered = initial ? [initial, ...jours] : jours;
+
+  for (const c of ordered) {
+    const rowData: Record<string, unknown> = {
+      label: c.type === "initial" ? "Fond initial" : formatDateFR(c.comptage_date!),
+      total: Number(c.total_compte),
+      by: c.created_by ?? "",
+      updated: formatDateTimeFR(c.updated_at),
+    };
+    for (const d of DENOMINATIONS) rowData[d.key] = c[d.key];
+
+    const row = sheet.addRow(rowData);
+    row.getCell("total").numFmt = CURRENCY_FMT;
+    row.eachCell((cell) => (cell.border = THIN_BORDER));
+  }
 }

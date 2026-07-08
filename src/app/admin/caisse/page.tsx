@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { todayParisISO, formatDateFR } from "@/lib/date";
 import { getStoredVendeur } from "@/lib/currentVendeur";
+import { computeCaisseRows } from "@/lib/caisseCalc";
 import {
   DENOMINATIONS,
   type CaisseComptage,
@@ -83,44 +84,7 @@ export default function CaissePage() {
 
   const initialComptage = comptages.find((c) => c.type === "initial") ?? null;
 
-  const rows = useMemo(() => {
-    const jours = comptages
-      .filter((c) => c.type === "jour" && c.comptage_date)
-      .sort((a, b) => (a.comptage_date! < b.comptage_date! ? -1 : 1));
-
-    const list: {
-      key: string;
-      label: string;
-      total: number;
-      recette: number | null;
-      especes: number | null;
-      ecart: number | null;
-    }[] = [];
-
-    let previousTotal = initialComptage ? Number(initialComptage.total_compte) : null;
-
-    if (initialComptage) {
-      list.push({
-        key: "initial",
-        label: "Fond initial",
-        total: Number(initialComptage.total_compte),
-        recette: null,
-        especes: null,
-        ecart: null,
-      });
-    }
-
-    for (const j of jours) {
-      const total = Number(j.total_compte);
-      const recette = previousTotal !== null ? total - previousTotal : null;
-      const especes = especesParJour[j.comptage_date!] ?? null;
-      const ecart = recette !== null && especes !== null ? recette - especes : null;
-      list.push({ key: j.comptage_date!, label: formatDateFR(j.comptage_date!), total, recette, especes, ecart });
-      previousTotal = total;
-    }
-
-    return list;
-  }, [comptages, especesParJour, initialComptage]);
+  const rows = useMemo(() => computeCaisseRows(comptages, especesParJour), [comptages, especesParJour]);
 
   const totalRecette = rows.reduce((s, r) => s + (r.recette ?? 0), 0);
   const totalEspeces = rows.reduce((s, r) => s + (r.especes ?? 0), 0);
@@ -209,6 +173,14 @@ export default function CaissePage() {
           >
             Compter la caisse de ce soir
           </button>
+          {rows.length > 0 && (
+            <a
+              href={`/api/caisse/export?event_id=${eventId}`}
+              className="rounded-lg border border-black/15 bg-white px-4 py-2 text-sm font-medium"
+            >
+              Télécharger le récap Excel
+            </a>
+          )}
         </div>
       )}
 
