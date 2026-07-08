@@ -176,7 +176,7 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
     { header: "PU (remisé)", key: "pu", width: 12 },
     { header: "PVP TTC", key: "pvpTtc", width: 12 },
     { header: "Total ligne", key: "totalLigne", width: 14 },
-    { header: "Remise", key: "remise", width: 12 },
+    { header: "Remise %", key: "remise", width: 12 },
     { header: "Mode de paiement", key: "modePaiement", width: 18 },
     { header: "Statut", key: "statut", width: 12 },
     { header: "Motif annulation", key: "motif", width: 24 },
@@ -195,7 +195,9 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
     shadeTicket = !shadeTicket;
     for (const item of ticket.ticket_items) {
       const pvpTtc = item.pvp_ttc === null || item.pvp_ttc === undefined ? null : Number(item.pvp_ttc);
-      const remise = pvpTtc === null ? null : (pvpTtc - Number(item.prix_unitaire)) * item.quantite;
+      // Taux de remise (pas un montant) : indépendant de la quantité, donc
+      // identique quel que soit le nombre d'unités vendues sur la ligne.
+      const remise = pvpTtc === null || pvpTtc === 0 ? null : (pvpTtc - Number(item.prix_unitaire)) / pvpTtc;
       const row = sheet.addRow({
         numero: ticket.numero,
         vendeur: ticket.vendeur,
@@ -214,13 +216,12 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
       row.getCell("totalLigne").numFmt = CURRENCY_FMT;
       if (pvpTtc !== null) {
         row.getCell("pvpTtc").numFmt = CURRENCY_FMT;
-        row.getCell("remise").numFmt = CURRENCY_FMT;
+        row.getCell("remise").numFmt = "0.0%";
       }
-      if (shadeTicket) {
-        row.eachCell((cell) => {
-          cell.fill = BAND_FILL;
-        });
-      }
+      row.eachCell((cell) => {
+        cell.border = THIN_BORDER;
+        if (shadeTicket) cell.fill = BAND_FILL;
+      });
       if (ticket.statut === "ANNULE") {
         row.eachCell((cell) => {
           cell.font = { color: { argb: "FF999999" }, italic: true };
