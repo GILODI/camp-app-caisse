@@ -167,18 +167,19 @@ function buildSyntheseSheet(
 
 function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]) {
   const sheet = workbook.addWorksheet("Saisie ventes");
+  const centered = { alignment: { horizontal: "center" as const } };
   sheet.columns = [
     { header: "N° ticket", key: "numero", width: 12 },
-    { header: "Vendeur", key: "vendeur", width: 16 },
+    { header: "Vendeur", key: "vendeur", width: 16, style: centered },
     { header: "Référence", key: "reference", width: 16 },
     { header: "Désignation", key: "designation", width: 32 },
-    { header: "Qté", key: "quantite", width: 8 },
-    { header: "PU (remisé)", key: "pu", width: 12 },
+    { header: "Qté", key: "quantite", width: 8, style: centered },
     { header: "PVP TTC", key: "pvpTtc", width: 12 },
+    { header: "PU (remisé)", key: "pu", width: 12 },
     { header: "Total ligne", key: "totalLigne", width: 14 },
-    { header: "Remise %", key: "remise", width: 12 },
+    { header: "Remise %", key: "remise", width: 12, style: centered },
     { header: "Mode de paiement", key: "modePaiement", width: 18 },
-    { header: "Statut", key: "statut", width: 12 },
+    { header: "Statut", key: "statut", width: 12, style: centered },
     { header: "Motif annulation", key: "motif", width: 24 },
   ];
   styleHeaderRow(sheet.getRow(1));
