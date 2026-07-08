@@ -31,8 +31,8 @@ export default function AidePage() {
         <ol className="list-decimal space-y-1 pl-5">
           <li>À l&apos;ouverture, choisir son prénom dans la liste des vendeurs de l&apos;événement.</li>
           <li>
-            La première fois, entrer le <strong>code d&apos;accès</strong> de l&apos;événement (donné par le
-            responsable) — à faire une seule fois par téléphone.
+            La première fois, entrer le <strong>code d&apos;accès</strong>{" "}
+            de l&apos;événement (donné par le responsable) — à faire une seule fois par téléphone.
           </li>
           <li>Onglet « Nouveau » → rechercher un produit par référence ou nom.</li>
           <li>Toucher le produit pour l&apos;ajouter, ajuster la quantité avec + / −.</li>
@@ -58,8 +58,9 @@ export default function AidePage() {
             <strong>Annuler</strong> : si la vente ne doit plus compter. Le ticket reste visible, marqué « annulé ».
           </li>
           <li>
-            <strong>Corriger</strong> : pour une erreur de quantité ou de produit. L&apos;ancien ticket est annulé
-            automatiquement et un nouveau ticket (avec un nouveau numéro) est créé avec les bonnes lignes.
+            <strong>Corriger</strong>{" "}
+            : pour une erreur de quantité ou de produit. L&apos;ancien ticket est annulé automatiquement et un
+            nouveau ticket (avec un nouveau numéro) est créé avec les bonnes lignes.
           </li>
         </ol>
       </Section>
@@ -73,9 +74,10 @@ export default function AidePage() {
       </Section>
 
       <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-        <strong>Coupure réseau ?</strong> Pas de panique : un ticket en cours de validation n&apos;est jamais perdu.
-        L&apos;app retente automatiquement l&apos;envoi dès que la connexion revient. Ne pas fermer la page tant que
-        « Envoi en cours… » est affiché.
+        <strong>Coupure réseau ?</strong>{" "}
+        Pas de panique : un ticket en cours de validation n&apos;est jamais perdu. L&apos;app retente
+        automatiquement l&apos;envoi dès que la connexion revient. Ne pas fermer la page tant que « Envoi en
+        cours… » est affiché.
       </div>
     </div>
   );
