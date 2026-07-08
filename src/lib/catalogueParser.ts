@@ -36,12 +36,30 @@ function normalize(s: string): string {
     .trim();
 }
 
+// Décode un buffer CSV en tenant compte de l'encodage. Excel/Notepad sur
+// Windows enregistrent souvent en "ANSI" (Windows-1252) plutôt qu'en UTF-8 :
+// sans cette détection, les caractères accentués (é, è, ç...) deviennent
+// illisibles. On détecte le BOM UTF-8 s'il existe, sinon on retombe sur
+// Windows-1252 si le décodage UTF-8 produit des caractères invalides.
+function decodeCsvBuffer(buffer: Buffer): string {
+  if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    return buffer.subarray(3).toString("utf-8");
+  }
+  const asUtf8 = buffer.toString("utf-8");
+  if (asUtf8.includes("�")) {
+    // Windows-1252 et Latin-1 (ISO-8859-1) coïncident sur les lettres
+    // accentuées françaises : latin1 suffit à corriger le cas courant.
+    return buffer.toString("latin1");
+  }
+  return asUtf8;
+}
+
 // Détecte le fichier xlsx (Référentiel Stand) ou un CSV de secours, et
 // renvoie une structure homogène { headers, rows } quel que soit le format.
 export async function parseSpreadsheet(buffer: Buffer, filename: string): Promise<ParsedSheet> {
   const lower = filename.toLowerCase();
   if (lower.endsWith(".csv")) {
-    return parseCsv(buffer.toString("utf-8"));
+    return parseCsv(decodeCsvBuffer(buffer));
   }
   return parseXlsx(buffer);
 }
