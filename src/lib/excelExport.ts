@@ -23,6 +23,11 @@ const THIN_BORDER: Partial<ExcelJS.Borders> = {
   left: { style: "thin", color: { argb: "FFCCCCCC" } },
   right: { style: "thin", color: { argb: "FFCCCCCC" } },
 };
+const BAND_FILL: ExcelJS.Fill = {
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: "FFF0EEEA" },
+};
 
 export function sanitizeFilenamePart(input: string): string {
   return input
@@ -182,7 +187,12 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
 
   const sorted = [...tickets].sort((a, b) => a.numero - b.numero);
 
+  // Bande grisée en alternance à chaque changement de ticket, pour repérer
+  // au premier coup d'œil où commence/finit chaque ticket sur plusieurs lignes.
+  let shadeTicket = false;
+
   for (const ticket of sorted) {
+    shadeTicket = !shadeTicket;
     for (const item of ticket.ticket_items) {
       const pvpTtc = item.pvp_ttc === null || item.pvp_ttc === undefined ? null : Number(item.pvp_ttc);
       const remise = pvpTtc === null ? null : (pvpTtc - Number(item.prix_unitaire)) * item.quantite;
@@ -205,6 +215,11 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
       if (pvpTtc !== null) {
         row.getCell("pvpTtc").numFmt = CURRENCY_FMT;
         row.getCell("remise").numFmt = CURRENCY_FMT;
+      }
+      if (shadeTicket) {
+        row.eachCell((cell) => {
+          cell.fill = BAND_FILL;
+        });
       }
       if (ticket.statut === "ANNULE") {
         row.eachCell((cell) => {
