@@ -136,6 +136,22 @@ function buildSyntheseSheet(
     ["Panier moyen", panierMoyen, CURRENCY_FMT],
   ];
 
+  // Remise totale : uniquement si le catalogue fournissait un PVP TTC pour
+  // au moins un article vendu (sinon la donnée n'existe simplement pas).
+  let hasPvpData = false;
+  let totalRemise = 0;
+  for (const ticket of valides) {
+    for (const item of ticket.ticket_items) {
+      if (item.pvp_ttc !== null && item.pvp_ttc !== undefined) {
+        hasPvpData = true;
+        totalRemise += (Number(item.pvp_ttc) - Number(item.prix_unitaire)) * item.quantite;
+      }
+    }
+  }
+  if (hasPvpData) {
+    statRows.push(["Remise totale accordée", totalRemise, CURRENCY_FMT]);
+  }
+
   for (const [label, value, fmt] of statRows) {
     const row = sheet.addRow([label, value]);
     row.getCell(1).font = { bold: true };
@@ -152,8 +168,10 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
     { header: "Référence", key: "reference", width: 16 },
     { header: "Désignation", key: "designation", width: 32 },
     { header: "Qté", key: "quantite", width: 8 },
-    { header: "PU", key: "pu", width: 12 },
+    { header: "PU (remisé)", key: "pu", width: 12 },
+    { header: "PVP TTC", key: "pvpTtc", width: 12 },
     { header: "Total ligne", key: "totalLigne", width: 14 },
+    { header: "Remise", key: "remise", width: 12 },
     { header: "Mode de paiement", key: "modePaiement", width: 18 },
     { header: "Statut", key: "statut", width: 12 },
     { header: "Motif annulation", key: "motif", width: 24 },
@@ -166,6 +184,8 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
 
   for (const ticket of sorted) {
     for (const item of ticket.ticket_items) {
+      const pvpTtc = item.pvp_ttc === null || item.pvp_ttc === undefined ? null : Number(item.pvp_ttc);
+      const remise = pvpTtc === null ? null : (pvpTtc - Number(item.prix_unitaire)) * item.quantite;
       const row = sheet.addRow({
         numero: ticket.numero,
         vendeur: ticket.vendeur,
@@ -173,13 +193,19 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
         designation: item.designation,
         quantite: item.quantite,
         pu: Number(item.prix_unitaire),
+        pvpTtc,
         totalLigne: Number(item.total_ligne),
+        remise,
         modePaiement: labelByMethod.get(ticket.mode_paiement) ?? ticket.mode_paiement,
         statut: ticket.statut === "VALIDE" ? "Validé" : "Annulé",
         motif: ticket.motif_annulation ?? "",
       });
       row.getCell("pu").numFmt = CURRENCY_FMT;
       row.getCell("totalLigne").numFmt = CURRENCY_FMT;
+      if (pvpTtc !== null) {
+        row.getCell("pvpTtc").numFmt = CURRENCY_FMT;
+        row.getCell("remise").numFmt = CURRENCY_FMT;
+      }
       if (ticket.statut === "ANNULE") {
         row.eachCell((cell) => {
           cell.font = { color: { argb: "FF999999" }, italic: true };
@@ -188,5 +214,5 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
     }
   }
 
-  sheet.autoFilter = { from: "A1", to: "J1" };
+  sheet.autoFilter = { from: "A1", to: "L1" };
 }

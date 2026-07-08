@@ -50,6 +50,7 @@ function NouveauTicketContent() {
             reference: item.reference,
             designation: item.designation,
             prix_unitaire: Number(item.prix_unitaire),
+            pvp_ttc: item.pvp_ttc === null ? null : Number(item.pvp_ttc),
             quantite: item.quantite,
           }))
         );
@@ -83,6 +84,7 @@ function NouveauTicketContent() {
           reference: item.reference,
           designation: item.designation,
           prix_unitaire: Number(item.prix_ttc),
+          pvp_ttc: item.pvp_ttc === null ? null : Number(item.pvp_ttc),
           quantite: 1,
         },
       ];
@@ -121,6 +123,7 @@ function NouveauTicketContent() {
         reference: l.reference,
         designation: l.designation,
         prix_unitaire: l.prix_unitaire,
+        pvp_ttc: l.pvp_ttc,
         quantite: l.quantite,
       })),
     };

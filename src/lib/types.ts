@@ -29,8 +29,8 @@ export interface CatalogueItem {
   event_id: string;
   reference: string;
   designation: string;
-  categorie: string | null;
   prix_ttc: number;
+  pvp_ttc: number | null;
 }
 
 export interface TicketItem {
@@ -39,6 +39,7 @@ export interface TicketItem {
   reference: string;
   designation: string;
   prix_unitaire: number;
+  pvp_ttc: number | null;
   quantite: number;
   total_ligne: number;
 }
@@ -69,6 +70,7 @@ export interface DraftLine {
   reference: string;
   designation: string;
   prix_unitaire: number;
+  pvp_ttc: number | null;
   quantite: number;
 }
 
@@ -80,6 +82,7 @@ export interface NewTicketPayload {
     reference: string;
     designation: string;
     prix_unitaire: number;
+    pvp_ttc: number | null;
     quantite: number;
   }[];
 }

@@ -43,8 +43,8 @@ create table if not exists public.catalogue_items (
   event_id uuid not null references public.events(id) on delete cascade,
   reference text not null,
   designation text not null,
-  categorie text,
   prix_ttc numeric(10,2) not null,
+  pvp_ttc numeric(10,2),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (event_id, reference)
@@ -96,6 +96,7 @@ create table if not exists public.ticket_items (
   reference text not null,
   designation text not null,
   prix_unitaire numeric(10,2) not null,
+  pvp_ttc numeric(10,2),
   quantite integer not null check (quantite > 0),
   total_ligne numeric(10,2) generated always as (prix_unitaire * quantite) stored,
   created_at timestamptz not null default now()
@@ -163,12 +164,13 @@ begin
 
   for v_item in select * from jsonb_array_elements(p_items)
   loop
-    insert into public.ticket_items (ticket_id, reference, designation, prix_unitaire, quantite)
+    insert into public.ticket_items (ticket_id, reference, designation, prix_unitaire, pvp_ttc, quantite)
     values (
       v_ticket_id,
       v_item->>'reference',
       v_item->>'designation',
       (v_item->>'prix_unitaire')::numeric,
+      nullif(v_item->>'pvp_ttc', '')::numeric,
       (v_item->>'quantite')::integer
     );
   end loop;

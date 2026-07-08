@@ -9,15 +9,15 @@ export interface ParsedSheet {
 export interface ColumnMapping {
   referenceCol: string;
   designationCol: string;
-  categorieCol: string | null;
   prixCol: string;
+  pvpTtcCol: string | null;
 }
 
 export interface CatalogueRowResult {
   reference: string;
   designation: string;
-  categorie: string | null;
   prix_ttc: number;
+  pvp_ttc: number | null;
 }
 
 export interface BuildResult {
@@ -157,13 +157,13 @@ function parseCsv(text: string): ParsedSheet {
 export function guessMapping(headers: string[]): {
   referenceCol: string | null;
   designationCol: string | null;
-  categorieCol: string | null;
   prixCol: string | null;
+  pvpTtcCol: string | null;
 } {
   const normalized = headers.map((h) => ({ raw: h, norm: normalize(h) }));
 
-  const find = (predicate: (norm: string) => boolean) =>
-    normalized.find((h) => predicate(h.norm))?.raw ?? null;
+  const find = (predicate: (norm: string) => boolean, exclude?: string | null) =>
+    normalized.find((h) => h.raw !== exclude && predicate(h.norm))?.raw ?? null;
 
   const referenceCol = find(
     (n) => n.includes("reference") || n === "ref" || n.includes("code article") || n.includes("code produit")
@@ -171,7 +171,6 @@ export function guessMapping(headers: string[]): {
   const designationCol = find(
     (n) => n.includes("designation") || n.includes("libelle") || n.includes("nom produit") || n === "produit" || n === "nom"
   );
-  const categorieCol = find((n) => n.includes("categorie") || n.includes("famille") || n.includes("rayon"));
 
   // Priorité : une colonne dont l'intitulé indique explicitement le prix
   // remisé/final (celui réellement facturé), avant tout "Prix" générique.
@@ -181,7 +180,12 @@ export function guessMapping(headers: string[]): {
     find((n) => n.includes("prix ttc")) ??
     find((n) => n.includes("prix"));
 
-  return { referenceCol, designationCol, categorieCol, prixCol };
+  // PVP TTC (prix public avant remise) : colonne distincte de celle déjà
+  // choisie comme prix de vente, utile pour le récap fin de journée.
+  const pvpTtcCol =
+    find((n) => n.includes("pvp"), prixCol) ?? find((n) => n.includes("prix ttc") || n.includes("prix"), prixCol);
+
+  return { referenceCol, designationCol, prixCol, pvpTtcCol };
 }
 
 export function parsePrice(raw: string): number | null {
@@ -202,8 +206,8 @@ export function buildCatalogueItems(rows: Record<string, string>[], mapping: Col
     const rowNumber = idx + 2; // +1 pour l'en-tête, +1 pour l'index 0-based
     const reference = row[mapping.referenceCol]?.trim();
     const designation = row[mapping.designationCol]?.trim();
-    const categorie = mapping.categorieCol ? row[mapping.categorieCol]?.trim() || null : null;
     const prixRaw = row[mapping.prixCol]?.trim();
+    const pvpTtcRaw = mapping.pvpTtcCol ? row[mapping.pvpTtcCol]?.trim() : undefined;
 
     if (!reference) {
       errors.push({ row: rowNumber, message: "Référence manquante — ligne ignorée" });
@@ -218,8 +222,11 @@ export function buildCatalogueItems(rows: Record<string, string>[], mapping: Col
       errors.push({ row: rowNumber, message: `Prix invalide pour "${reference}" ("${prixRaw}") — ligne ignorée` });
       return;
     }
+    // PVP TTC est informatif (récap fin de journée) : une valeur absente ou
+    // invalide ne bloque pas l'import de la ligne.
+    const pvp_ttc = pvpTtcRaw ? parsePrice(pvpTtcRaw) : null;
 
-    items.push({ reference, designation, categorie, prix_ttc });
+    items.push({ reference, designation, prix_ttc, pvp_ttc });
   });
 
   return { items, errors };

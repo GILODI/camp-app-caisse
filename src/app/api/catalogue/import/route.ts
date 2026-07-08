@@ -10,8 +10,8 @@ export async function POST(req: NextRequest) {
   const event_id = formData.get("event_id");
   const referenceCol = formData.get("referenceCol");
   const designationCol = formData.get("designationCol");
-  const categorieCol = formData.get("categorieCol");
   const prixCol = formData.get("prixCol");
+  const pvpTtcCol = formData.get("pvpTtcCol");
   const mode = formData.get("mode"); // "replace" | "append_or_update"
 
   if (!(file instanceof File) || typeof event_id !== "string") {
@@ -27,8 +27,8 @@ export async function POST(req: NextRequest) {
     const { items, errors } = buildCatalogueItems(rows, {
       referenceCol,
       designationCol,
-      categorieCol: typeof categorieCol === "string" && categorieCol ? categorieCol : null,
       prixCol,
+      pvpTtcCol: typeof pvpTtcCol === "string" && pvpTtcCol ? pvpTtcCol : null,
     });
 
     if (items.length === 0) {

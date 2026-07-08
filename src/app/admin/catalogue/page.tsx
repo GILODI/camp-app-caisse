@@ -12,8 +12,8 @@ interface PreviewData {
   guessed: {
     referenceCol: string | null;
     designationCol: string | null;
-    categorieCol: string | null;
     prixCol: string | null;
+    pvpTtcCol: string | null;
   };
 }
 
@@ -28,7 +28,7 @@ export default function CataloguePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PreviewData | null>(null);
-  const [mapping, setMapping] = useState({ referenceCol: "", designationCol: "", categorieCol: "", prixCol: "" });
+  const [mapping, setMapping] = useState({ referenceCol: "", designationCol: "", prixCol: "", pvpTtcCol: "" });
   const [mode, setMode] = useState<"append_or_update" | "replace">("append_or_update");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -47,8 +47,8 @@ export default function CataloguePage() {
       setMapping({
         referenceCol: body.guessed.referenceCol ?? "",
         designationCol: body.guessed.designationCol ?? "",
-        categorieCol: body.guessed.categorieCol ?? "",
         prixCol: body.guessed.prixCol ?? "",
+        pvpTtcCol: body.guessed.pvpTtcCol ?? "",
       });
     } catch (err) {
       toast.error((err as Error).message);
@@ -71,8 +71,8 @@ export default function CataloguePage() {
       formData.append("event_id", event.id);
       formData.append("referenceCol", mapping.referenceCol);
       formData.append("designationCol", mapping.designationCol);
-      formData.append("categorieCol", mapping.categorieCol);
       formData.append("prixCol", mapping.prixCol);
+      formData.append("pvpTtcCol", mapping.pvpTtcCol);
       formData.append("mode", mode);
       const res = await fetch("/api/catalogue/import", { method: "POST", body: formData });
       const body = await res.json();
@@ -140,17 +140,17 @@ export default function CataloguePage() {
             onChange={(v) => setMapping((m) => ({ ...m, designationCol: v }))}
           />
           <MappingSelect
-            label="Catégorie (optionnel)"
-            value={mapping.categorieCol}
-            headers={preview.headers}
-            onChange={(v) => setMapping((m) => ({ ...m, categorieCol: v }))}
-            optional
-          />
-          <MappingSelect
-            label="Prix TTC remisé"
+            label="Prix remisé (celui facturé)"
             value={mapping.prixCol}
             headers={preview.headers}
             onChange={(v) => setMapping((m) => ({ ...m, prixCol: v }))}
+          />
+          <MappingSelect
+            label="PVP TTC avant remise (optionnel)"
+            value={mapping.pvpTtcCol}
+            headers={preview.headers}
+            onChange={(v) => setMapping((m) => ({ ...m, pvpTtcCol: v }))}
+            optional
           />
 
           <div>
