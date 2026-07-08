@@ -108,6 +108,48 @@ create table if not exists public.ticket_items (
 
 create index if not exists ticket_items_ticket_idx on public.ticket_items (ticket_id);
 
+-- ----------------------------------------------------------------------------
+-- caisse_comptages : comptage physique de la caisse espèces (billets/pièces),
+-- pour vérifier chaque soir que le compte correspond aux ventes espèces
+-- enregistrées. Un comptage "initial" (fond de caisse avant l'événement) et
+-- un comptage "jour" par date réelle (pas de position figée Jour 1/2/3, ça
+-- marche pour un événement de n'importe quelle durée).
+-- ----------------------------------------------------------------------------
+create table if not exists public.caisse_comptages (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  type text not null check (type in ('initial', 'jour')),
+  comptage_date date, -- null pour "initial", requis pour "jour"
+  nb_billets_50 integer not null default 0,
+  nb_billets_20 integer not null default 0,
+  nb_billets_10 integer not null default 0,
+  nb_billets_5 integer not null default 0,
+  nb_pieces_2 integer not null default 0,
+  nb_pieces_1 integer not null default 0,
+  nb_pieces_050 integer not null default 0,
+  nb_pieces_020 integer not null default 0,
+  nb_pieces_010 integer not null default 0,
+  nb_pieces_005 integer not null default 0,
+  total_compte numeric(10,2) generated always as (
+    nb_billets_50 * 50 + nb_billets_20 * 20 + nb_billets_10 * 10 + nb_billets_5 * 5 +
+    nb_pieces_2 * 2 + nb_pieces_1 * 1 + nb_pieces_050 * 0.5 + nb_pieces_020 * 0.2 +
+    nb_pieces_010 * 0.1 + nb_pieces_005 * 0.05
+  ) stored,
+  created_by text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Un seul comptage "initial" par événement...
+create unique index if not exists caisse_comptages_initial_idx
+  on public.caisse_comptages (event_id)
+  where type = 'initial';
+
+-- ...et un seul comptage "jour" par événement et par date.
+create unique index if not exists caisse_comptages_jour_idx
+  on public.caisse_comptages (event_id, comptage_date)
+  where type = 'jour';
+
 -- ============================================================================
 -- Fonctions RPC — numérotation atomique + création/annulation/correction.
 -- Appelées côté serveur (route API Next.js) avec la clé service_role.
@@ -228,6 +270,88 @@ begin
 end;
 $$;
 
+-- Enregistre (ou met à jour si déjà saisi) un comptage de caisse espèces.
+-- Un seul comptage "initial" par événement, un seul comptage "jour" par date.
+create or replace function public.save_comptage(
+  p_event_id uuid,
+  p_type text,
+  p_comptage_date date,
+  p_nb_billets_50 integer,
+  p_nb_billets_20 integer,
+  p_nb_billets_10 integer,
+  p_nb_billets_5 integer,
+  p_nb_pieces_2 integer,
+  p_nb_pieces_1 integer,
+  p_nb_pieces_050 integer,
+  p_nb_pieces_020 integer,
+  p_nb_pieces_010 integer,
+  p_nb_pieces_005 integer,
+  p_by text
+)
+returns public.caisse_comptages
+language plpgsql
+as $$
+declare
+  v_row public.caisse_comptages;
+begin
+  if p_type = 'initial' then
+    insert into public.caisse_comptages (
+      event_id, type, comptage_date, nb_billets_50, nb_billets_20, nb_billets_10, nb_billets_5,
+      nb_pieces_2, nb_pieces_1, nb_pieces_050, nb_pieces_020, nb_pieces_010, nb_pieces_005, created_by
+    )
+    values (
+      p_event_id, 'initial', null, p_nb_billets_50, p_nb_billets_20, p_nb_billets_10, p_nb_billets_5,
+      p_nb_pieces_2, p_nb_pieces_1, p_nb_pieces_050, p_nb_pieces_020, p_nb_pieces_010, p_nb_pieces_005, p_by
+    )
+    on conflict (event_id) where type = 'initial'
+    do update set
+      nb_billets_50 = excluded.nb_billets_50,
+      nb_billets_20 = excluded.nb_billets_20,
+      nb_billets_10 = excluded.nb_billets_10,
+      nb_billets_5 = excluded.nb_billets_5,
+      nb_pieces_2 = excluded.nb_pieces_2,
+      nb_pieces_1 = excluded.nb_pieces_1,
+      nb_pieces_050 = excluded.nb_pieces_050,
+      nb_pieces_020 = excluded.nb_pieces_020,
+      nb_pieces_010 = excluded.nb_pieces_010,
+      nb_pieces_005 = excluded.nb_pieces_005,
+      created_by = excluded.created_by,
+      updated_at = now()
+    returning * into v_row;
+  else
+    if p_comptage_date is null then
+      raise exception 'comptage_date requis pour un comptage de type jour';
+    end if;
+
+    insert into public.caisse_comptages (
+      event_id, type, comptage_date, nb_billets_50, nb_billets_20, nb_billets_10, nb_billets_5,
+      nb_pieces_2, nb_pieces_1, nb_pieces_050, nb_pieces_020, nb_pieces_010, nb_pieces_005, created_by
+    )
+    values (
+      p_event_id, 'jour', p_comptage_date, p_nb_billets_50, p_nb_billets_20, p_nb_billets_10, p_nb_billets_5,
+      p_nb_pieces_2, p_nb_pieces_1, p_nb_pieces_050, p_nb_pieces_020, p_nb_pieces_010, p_nb_pieces_005, p_by
+    )
+    on conflict (event_id, comptage_date) where type = 'jour'
+    do update set
+      nb_billets_50 = excluded.nb_billets_50,
+      nb_billets_20 = excluded.nb_billets_20,
+      nb_billets_10 = excluded.nb_billets_10,
+      nb_billets_5 = excluded.nb_billets_5,
+      nb_pieces_2 = excluded.nb_pieces_2,
+      nb_pieces_1 = excluded.nb_pieces_1,
+      nb_pieces_050 = excluded.nb_pieces_050,
+      nb_pieces_020 = excluded.nb_pieces_020,
+      nb_pieces_010 = excluded.nb_pieces_010,
+      nb_pieces_005 = excluded.nb_pieces_005,
+      created_by = excluded.created_by,
+      updated_at = now()
+    returning * into v_row;
+  end if;
+
+  return v_row;
+end;
+$$;
+
 -- ============================================================================
 -- Row Level Security — lecture publique (nécessaire pour Realtime côté
 -- vendeurs), écriture uniquement via la clé service_role (routes API
@@ -240,6 +364,7 @@ alter table public.catalogue_items enable row level security;
 alter table public.ticket_counters enable row level security;
 alter table public.tickets enable row level security;
 alter table public.ticket_items enable row level security;
+alter table public.caisse_comptages enable row level security;
 
 drop policy if exists "lecture publique events" on public.events;
 create policy "lecture publique events" on public.events for select using (true);
@@ -255,6 +380,9 @@ create policy "lecture publique tickets" on public.tickets for select using (tru
 
 drop policy if exists "lecture publique ticket_items" on public.ticket_items;
 create policy "lecture publique ticket_items" on public.ticket_items for select using (true);
+
+drop policy if exists "lecture publique caisse_comptages" on public.caisse_comptages;
+create policy "lecture publique caisse_comptages" on public.caisse_comptages for select using (true);
 
 -- ticket_counters n'a pas besoin d'être lisible côté client : aucune policy.
 

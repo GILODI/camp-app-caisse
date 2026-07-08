@@ -89,3 +89,42 @@ export interface NewTicketPayload {
     quantite: number;
   }[];
 }
+
+// Suivi de caisse espèces (comptage physique billets/pièces).
+export const DENOMINATIONS = [
+  { key: "nb_billets_50", label: "Billet 50 €", valeur: 50 },
+  { key: "nb_billets_20", label: "Billet 20 €", valeur: 20 },
+  { key: "nb_billets_10", label: "Billet 10 €", valeur: 10 },
+  { key: "nb_billets_5", label: "Billet 5 €", valeur: 5 },
+  { key: "nb_pieces_2", label: "Pièce 2 €", valeur: 2 },
+  { key: "nb_pieces_1", label: "Pièce 1 €", valeur: 1 },
+  { key: "nb_pieces_050", label: "Pièce 0,50 €", valeur: 0.5 },
+  { key: "nb_pieces_020", label: "Pièce 0,20 €", valeur: 0.2 },
+  { key: "nb_pieces_010", label: "Pièce 0,10 €", valeur: 0.1 },
+  { key: "nb_pieces_005", label: "Pièce 0,05 €", valeur: 0.05 },
+] as const;
+
+export type DenominationKey = (typeof DENOMINATIONS)[number]["key"];
+
+export type DenominationCounts = Record<DenominationKey, number>;
+
+export type ComptageType = "initial" | "jour";
+
+export interface CaisseComptage extends DenominationCounts {
+  id: string;
+  event_id: string;
+  type: ComptageType;
+  comptage_date: string | null;
+  total_compte: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SaveComptagePayload {
+  event_id: string;
+  type: ComptageType;
+  comptage_date: string | null;
+  counts: DenominationCounts;
+  by: string;
+}

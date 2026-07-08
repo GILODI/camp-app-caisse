@@ -16,6 +16,11 @@ const LINKS = [
     title: "Export fin de journée",
     desc: "Télécharger le fichier Excel de synthèse d'une journée de vente.",
   },
+  {
+    href: "/admin/caisse",
+    title: "Caisse espèces",
+    desc: "Comptage du fond initial et de la caisse chaque soir, comparé aux ventes espèces.",
+  },
 ];
 
 export default function AdminPage() {
