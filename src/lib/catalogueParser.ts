@@ -188,12 +188,19 @@ export function guessMapping(headers: string[]): {
   return { referenceCol, designationCol, prixCol, pvpTtcCol };
 }
 
+const STRIP_CHARS_RE = new RegExp("[€\\s\\u00A0]", "g");
+
 export function parsePrice(raw: string): number | null {
   if (!raw) return null;
-  const cleaned = raw
-    .replace(/[€\s ]/g, "")
-    .replace(/\.(?=\d{3}(?:\D|$))/g, "") // sépare milliers "1.234,56"
-    .replace(",", ".");
+  let cleaned = raw.replace(STRIP_CHARS_RE, "");
+  // Le "." n'est un séparateur de milliers (notation française "1.234,56")
+  // que si une virgule est aussi présente. Sans virgule, un nombre comme
+  // "80.004" vient d'une cellule Excel numérique (notation anglo-saxonne,
+  // ici avec un résidu de calcul en amont) : le point est la décimale, il
+  // ne faut pas le supprimer sous peine de lire 80,004 comme 80004.
+  if (cleaned.includes(",")) {
+    cleaned = cleaned.replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".");
+  }
   const value = Number(cleaned);
   return Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
 }
