@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
   const designationCol = formData.get("designationCol");
   const prixCol = formData.get("prixCol");
   const pvpTtcCol = formData.get("pvpTtcCol");
+  const stockCol = formData.get("stockCol");
   const mode = formData.get("mode"); // "replace" | "append_or_update"
 
   if (!(file instanceof File) || typeof event_id !== "string") {
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
       designationCol,
       prixCol,
       pvpTtcCol: typeof pvpTtcCol === "string" && pvpTtcCol ? pvpTtcCol : null,
+      stockCol: typeof stockCol === "string" && stockCol ? stockCol : null,
     });
 
     if (items.length === 0) {

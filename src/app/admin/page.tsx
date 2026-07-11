@@ -21,6 +21,16 @@ const LINKS = [
     title: "Caisse espèces",
     desc: "Comptage du fond initial et de la caisse chaque soir, comparé aux ventes espèces.",
   },
+  {
+    href: "/admin/stock",
+    title: "État du stock",
+    desc: "Stock restant par produit (initial − ventes − vol/dotation/casse).",
+  },
+  {
+    href: "/admin/mouvements",
+    title: "Mouvements de stock",
+    desc: "Enregistrer une dotation, un vol ou une casse (sortie hors vente).",
+  },
 ];
 
 export default function AdminPage() {
