@@ -9,6 +9,26 @@ export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
 
 export type TicketStatus = "VALIDE" | "ANNULE";
 
+export type MouvementType = "VOL" | "DOTATION" | "CASSE";
+
+export const MOUVEMENT_TYPES: { value: MouvementType; label: string }[] = [
+  { value: "DOTATION", label: "Dotation (don athlète…)" },
+  { value: "VOL", label: "Vol" },
+  { value: "CASSE", label: "Casse / perte" },
+];
+
+export interface MouvementStock {
+  id: string;
+  event_id: string;
+  reference: string;
+  designation: string;
+  type: MouvementType;
+  quantite: number;
+  motif: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface EventRow {
   id: string;
   nom: string;
@@ -34,6 +54,7 @@ export interface CatalogueItem {
   designation: string;
   prix_ttc: number;
   pvp_ttc: number | null;
+  stock_initial: number | null;
 }
 
 export interface TicketItem {
@@ -43,6 +64,7 @@ export interface TicketItem {
   designation: string;
   prix_unitaire: number;
   pvp_ttc: number | null;
+  prix_modifie: boolean;
   quantite: number;
   total_ligne: number;
 }
@@ -73,6 +95,9 @@ export interface DraftLine {
   reference: string;
   designation: string;
   prix_unitaire: number;
+  // Prix catalogue d'origine, pour détecter une modification manuelle et
+  // proposer un « retour au prix normal ».
+  prix_catalogue: number;
   pvp_ttc: number | null;
   quantite: number;
 }
@@ -86,6 +111,7 @@ export interface NewTicketPayload {
     designation: string;
     prix_unitaire: number;
     pvp_ttc: number | null;
+    prix_modifie: boolean;
     quantite: number;
   }[];
 }

@@ -49,6 +49,8 @@ create table if not exists public.catalogue_items (
   designation text not null,
   prix_ttc numeric(10,2) not null,
   pvp_ttc numeric(10,2),
+  -- quantité initiale en stock (bon de commande) ; null = produit non suivi.
+  stock_initial integer,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (event_id, reference)
@@ -101,12 +103,33 @@ create table if not exists public.ticket_items (
   designation text not null,
   prix_unitaire numeric(10,2) not null,
   pvp_ttc numeric(10,2),
+  -- true si le vendeur a modifié le prix à la main au moment de la vente
+  -- (remise ponctuelle produit d'expo, emballage abîmé…). Colorié à l'export.
+  prix_modifie boolean not null default false,
   quantite integer not null check (quantite > 0),
   total_ligne numeric(10,2) generated always as (prix_unitaire * quantite) stored,
   created_at timestamptz not null default now()
 );
 
 create index if not exists ticket_items_ticket_idx on public.ticket_items (ticket_id);
+
+-- ----------------------------------------------------------------------------
+-- mouvements_stock : sorties de stock hors vente (vol, dotation athlète,
+-- casse). Décrémentent le stock restant sans compter comme chiffre d'affaires.
+-- ----------------------------------------------------------------------------
+create table if not exists public.mouvements_stock (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  reference text not null,
+  designation text not null,
+  type text not null check (type in ('VOL', 'DOTATION', 'CASSE')),
+  quantite integer not null check (quantite > 0),
+  motif text,
+  created_by text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists mouvements_stock_event_idx on public.mouvements_stock (event_id);
 
 -- ----------------------------------------------------------------------------
 -- caisse_comptages : comptage physique de la caisse espèces (billets/pièces),
@@ -176,7 +199,8 @@ end;
 $$;
 
 -- Création d'un ticket + ses lignes, en une transaction, avec numéro atomique.
--- p_items : jsonb array de { reference, designation, prix_unitaire, quantite }
+-- p_items : jsonb array de { reference, designation, prix_unitaire, pvp_ttc,
+--           prix_modifie, quantite } (prix_modifie/pvp_ttc optionnels)
 create or replace function public.create_ticket(
   p_event_id uuid,
   p_vendeur text,
@@ -210,13 +234,14 @@ begin
 
   for v_item in select * from jsonb_array_elements(p_items)
   loop
-    insert into public.ticket_items (ticket_id, reference, designation, prix_unitaire, pvp_ttc, quantite)
+    insert into public.ticket_items (ticket_id, reference, designation, prix_unitaire, pvp_ttc, prix_modifie, quantite)
     values (
       v_ticket_id,
       v_item->>'reference',
       v_item->>'designation',
       (v_item->>'prix_unitaire')::numeric,
       nullif(v_item->>'pvp_ttc', '')::numeric,
+      coalesce((v_item->>'prix_modifie')::boolean, false),
       (v_item->>'quantite')::integer
     );
   end loop;
@@ -365,6 +390,7 @@ alter table public.ticket_counters enable row level security;
 alter table public.tickets enable row level security;
 alter table public.ticket_items enable row level security;
 alter table public.caisse_comptages enable row level security;
+alter table public.mouvements_stock enable row level security;
 
 drop policy if exists "lecture publique events" on public.events;
 create policy "lecture publique events" on public.events for select using (true);
@@ -383,6 +409,9 @@ create policy "lecture publique ticket_items" on public.ticket_items for select 
 
 drop policy if exists "lecture publique caisse_comptages" on public.caisse_comptages;
 create policy "lecture publique caisse_comptages" on public.caisse_comptages for select using (true);
+
+drop policy if exists "lecture publique mouvements_stock" on public.mouvements_stock;
+create policy "lecture publique mouvements_stock" on public.mouvements_stock for select using (true);
 
 -- ticket_counters n'a pas besoin d'être lisible côté client : aucune policy.
 
@@ -418,5 +447,12 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'vendeurs'
   ) then
     alter publication supabase_realtime add table public.vendeurs;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'mouvements_stock'
+  ) then
+    alter publication supabase_realtime add table public.mouvements_stock;
   end if;
 end $$;

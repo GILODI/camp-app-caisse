@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { CatalogueItem } from "@/lib/types";
+import type { StockLine } from "@/lib/hooks";
 
 function normalize(s: string): string {
   return s
@@ -12,9 +13,11 @@ function normalize(s: string): string {
 
 export function ProductAutocomplete({
   items,
+  stock,
   onSelect,
 }: {
   items: CatalogueItem[];
+  stock?: Map<string, StockLine>;
   onSelect: (item: CatalogueItem) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -51,7 +54,10 @@ export function ProductAutocomplete({
               >
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{item.designation}</span>
-                  <span className="block text-xs text-black/50">{item.reference}</span>
+                  <span className="block text-xs text-black/50">
+                    {item.reference}
+                    <StockBadge line={stock?.get(item.reference)} />
+                  </span>
                 </span>
                 <span className="shrink-0 font-semibold text-brand">{item.prix_ttc.toFixed(2)} €</span>
               </button>
@@ -65,5 +71,16 @@ export function ProductAutocomplete({
         </p>
       )}
     </div>
+  );
+}
+
+function StockBadge({ line }: { line?: StockLine }) {
+  if (!line) return null; // produit non suivi en stock
+  const color =
+    line.restant <= 0 ? "text-red-600" : line.restant <= 3 ? "text-amber-600" : "text-black/50";
+  return (
+    <span className={`ml-2 font-medium ${color}`}>
+      · stock : {line.restant}
+    </span>
   );
 }

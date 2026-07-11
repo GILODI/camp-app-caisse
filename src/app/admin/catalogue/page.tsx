@@ -14,6 +14,7 @@ interface PreviewData {
     designationCol: string | null;
     prixCol: string | null;
     pvpTtcCol: string | null;
+    stockCol: string | null;
   };
 }
 
@@ -28,7 +29,13 @@ export default function CataloguePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PreviewData | null>(null);
-  const [mapping, setMapping] = useState({ referenceCol: "", designationCol: "", prixCol: "", pvpTtcCol: "" });
+  const [mapping, setMapping] = useState({
+    referenceCol: "",
+    designationCol: "",
+    prixCol: "",
+    pvpTtcCol: "",
+    stockCol: "",
+  });
   const [mode, setMode] = useState<"append_or_update" | "replace">("append_or_update");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -49,6 +56,7 @@ export default function CataloguePage() {
         designationCol: body.guessed.designationCol ?? "",
         prixCol: body.guessed.prixCol ?? "",
         pvpTtcCol: body.guessed.pvpTtcCol ?? "",
+        stockCol: body.guessed.stockCol ?? "",
       });
     } catch (err) {
       toast.error((err as Error).message);
@@ -73,6 +81,7 @@ export default function CataloguePage() {
       formData.append("designationCol", mapping.designationCol);
       formData.append("prixCol", mapping.prixCol);
       formData.append("pvpTtcCol", mapping.pvpTtcCol);
+      formData.append("stockCol", mapping.stockCol);
       formData.append("mode", mode);
       const res = await fetch("/api/catalogue/import", { method: "POST", body: formData });
       const body = await res.json();
@@ -150,6 +159,13 @@ export default function CataloguePage() {
             value={mapping.pvpTtcCol}
             headers={preview.headers}
             onChange={(v) => setMapping((m) => ({ ...m, pvpTtcCol: v }))}
+            optional
+          />
+          <MappingSelect
+            label="Stock initial (optionnel)"
+            value={mapping.stockCol}
+            headers={preview.headers}
+            onChange={(v) => setMapping((m) => ({ ...m, stockCol: v }))}
             optional
           />
 

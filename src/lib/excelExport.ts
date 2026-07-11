@@ -228,6 +228,13 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
         cell.border = THIN_BORDER;
         if (shadeTicket) cell.fill = BAND_FILL;
       });
+      // Prix modifié à la main (remise ponctuelle) : PU en orange gras + fond
+      // clair, pour le repérer d'un coup d'œil au contrôle du soir.
+      if (item.prix_modifie) {
+        const puCell = row.getCell("pu");
+        puCell.font = { color: { argb: "FFE65100" }, bold: true };
+        puCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE0B2" } };
+      }
       if (ticket.statut === "ANNULE") {
         row.eachCell((cell) => {
           cell.font = { color: { argb: "FF999999" }, italic: true };

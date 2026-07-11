@@ -11,6 +11,7 @@ export interface ColumnMapping {
   designationCol: string;
   prixCol: string;
   pvpTtcCol: string | null;
+  stockCol: string | null;
 }
 
 export interface CatalogueRowResult {
@@ -18,6 +19,7 @@ export interface CatalogueRowResult {
   designation: string;
   prix_ttc: number;
   pvp_ttc: number | null;
+  stock_initial: number | null;
 }
 
 export interface BuildResult {
@@ -159,6 +161,7 @@ export function guessMapping(headers: string[]): {
   designationCol: string | null;
   prixCol: string | null;
   pvpTtcCol: string | null;
+  stockCol: string | null;
 } {
   const normalized = headers.map((h) => ({ raw: h, norm: normalize(h) }));
 
@@ -185,7 +188,12 @@ export function guessMapping(headers: string[]): {
   const pvpTtcCol =
     find((n) => n.includes("pvp"), prixCol) ?? find((n) => n.includes("prix ttc") || n.includes("prix"), prixCol);
 
-  return { referenceCol, designationCol, prixCol, pvpTtcCol };
+  // Stock initial (quantité en stock au départ), optionnel.
+  const stockCol = find(
+    (n) => n.includes("stock") || n.includes("quantite") || n.includes("qte") || n === "qty"
+  );
+
+  return { referenceCol, designationCol, prixCol, pvpTtcCol, stockCol };
 }
 
 const STRIP_CHARS_RE = new RegExp("[€\\s\\u00A0]", "g");
@@ -215,6 +223,7 @@ export function buildCatalogueItems(rows: Record<string, string>[], mapping: Col
     const designation = row[mapping.designationCol]?.trim();
     const prixRaw = row[mapping.prixCol]?.trim();
     const pvpTtcRaw = mapping.pvpTtcCol ? row[mapping.pvpTtcCol]?.trim() : undefined;
+    const stockRaw = mapping.stockCol ? row[mapping.stockCol]?.trim() : undefined;
 
     if (!reference) {
       errors.push({ row: rowNumber, message: "Référence manquante — ligne ignorée" });
@@ -233,7 +242,14 @@ export function buildCatalogueItems(rows: Record<string, string>[], mapping: Col
     // invalide ne bloque pas l'import de la ligne.
     const pvp_ttc = pvpTtcRaw ? parsePrice(pvpTtcRaw) : null;
 
-    items.push({ reference, designation, prix_ttc, pvp_ttc });
+    // Stock initial optionnel : entier positif, sinon null (produit non suivi).
+    let stock_initial: number | null = null;
+    if (stockRaw) {
+      const n = Math.floor(Number(stockRaw.replace(",", ".")));
+      if (Number.isFinite(n) && n >= 0) stock_initial = n;
+    }
+
+    items.push({ reference, designation, prix_ttc, pvp_ttc, stock_initial });
   });
 
   return { items, errors };

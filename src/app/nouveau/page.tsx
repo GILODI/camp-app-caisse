@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { useActiveEvent, useCatalogue } from "@/lib/hooks";
+import { useActiveEvent, useCatalogue, useStock } from "@/lib/hooks";
 import { getStoredVendeur } from "@/lib/currentVendeur";
 import { getTicketQueue, type TicketResult } from "@/lib/offlineQueue";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -57,6 +57,7 @@ function NouveauTicketContent() {
 
 function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: string }) {
   const { items: catalogue } = useCatalogue(event.id);
+  const { stock } = useStock(event.id);
   const router = useRouter();
   const searchParams = useSearchParams();
   const correctId = searchParams.get("correct");
@@ -86,6 +87,9 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
             reference: item.reference,
             designation: item.designation,
             prix_unitaire: Number(item.prix_unitaire),
+            // On repart du prix facturé comme référence : la trace de la
+            // modification d'origine reste dans le ticket annulé (audit).
+            prix_catalogue: Number(item.prix_unitaire),
             pvp_ttc: item.pvp_ttc === null ? null : Number(item.pvp_ttc),
             quantite: item.quantite,
           }))
@@ -120,6 +124,7 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
           reference: item.reference,
           designation: item.designation,
           prix_unitaire: Number(item.prix_ttc),
+          prix_catalogue: Number(item.prix_ttc),
           pvp_ttc: item.pvp_ttc === null ? null : Number(item.pvp_ttc),
           quantite: 1,
         },
@@ -132,6 +137,10 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
       if (quantite <= 0) return prev.filter((l) => l.key !== key);
       return prev.map((l) => (l.key === key ? { ...l, quantite } : l));
     });
+  }
+
+  function changePrice(key: string, prix: number) {
+    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, prix_unitaire: prix } : l)));
   }
 
   function removeLine(key: string) {
@@ -160,6 +169,7 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
         designation: l.designation,
         prix_unitaire: l.prix_unitaire,
         pvp_ttc: l.pvp_ttc,
+        prix_modifie: Math.abs(l.prix_unitaire - l.prix_catalogue) > 0.001,
         quantite: l.quantite,
       })),
     };
@@ -239,9 +249,14 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
         </div>
       )}
 
-      <ProductAutocomplete items={catalogue} onSelect={addItem} />
+      <ProductAutocomplete items={catalogue} stock={stock} onSelect={addItem} />
 
-      <TicketLinesEditor lines={lines} onChangeQuantite={changeQuantite} onRemove={removeLine} />
+      <TicketLinesEditor
+        lines={lines}
+        onChangeQuantite={changeQuantite}
+        onChangePrice={changePrice}
+        onRemove={removeLine}
+      />
 
       <div className="flex items-center justify-between rounded-lg bg-brand-dark px-4 py-3 text-white">
         <span className="font-medium">Total</span>
