@@ -1,7 +1,8 @@
 import ExcelJS from "exceljs";
-import type { CaisseComptage, PaymentMethod, TicketWithItems } from "./types";
-import { DENOMINATIONS, PAYMENT_METHODS } from "./types";
+import type { CaisseComptage, MouvementStock, PaymentMethod, TicketWithItems } from "./types";
+import { DENOMINATIONS, MOUVEMENT_TYPES, PAYMENT_METHODS } from "./types";
 import type { CaisseRow } from "./caisseCalc";
+import type { StockLine } from "./stock";
 import { formatDateFR, formatDateTimeFR } from "./date";
 
 const CURRENCY_FMT = '#,##0.00 "€"';
@@ -44,6 +45,14 @@ export function buildExportFilename(eventNom: string, venteDate: string): string
 
 export function buildCaisseExportFilename(eventNom: string): string {
   return `Decompte_Caisse_Especes_${sanitizeFilenamePart(eventNom)}.xlsx`;
+}
+
+export function buildStockExportFilename(eventNom: string): string {
+  return `Etat_Stock_${sanitizeFilenamePart(eventNom)}.xlsx`;
+}
+
+export function buildMouvementsExportFilename(eventNom: string): string {
+  return `Mouvements_Stock_${sanitizeFilenamePart(eventNom)}.xlsx`;
 }
 
 function styleHeaderRow(row: ExcelJS.Row) {
@@ -338,4 +347,95 @@ function buildCaisseDetailSheet(workbook: ExcelJS.Workbook, comptages: CaisseCom
     row.getCell("total").numFmt = CURRENCY_FMT;
     row.eachCell((cell) => (cell.border = THIN_BORDER));
   }
+}
+
+export async function generateStockExport(eventNom: string, lines: StockLine[]): Promise<ExcelJS.Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Caisse événementielle C.A.M.P. France";
+  workbook.created = new Date();
+
+  const sheet = workbook.addWorksheet("État du stock");
+  const centered = { alignment: { horizontal: "center" as const } };
+  sheet.columns = [
+    { header: "Référence", key: "reference", width: 14 },
+    { header: "Désignation", key: "designation", width: 40 },
+    { header: "Stock initial", key: "stock_initial", width: 14, style: centered },
+    { header: "Vendu", key: "vendu", width: 10, style: centered },
+    { header: "Vol/dot./casse", key: "mouvements", width: 16, style: centered },
+    { header: "Restant", key: "restant", width: 12, style: centered },
+  ];
+  styleHeaderRow(sheet.getRow(1));
+
+  const sorted = [...lines].sort((a, b) => a.designation.localeCompare(b.designation));
+  for (const l of sorted) {
+    const row = sheet.addRow({
+      reference: l.reference,
+      designation: l.designation,
+      stock_initial: l.stock_initial,
+      vendu: l.vendu,
+      mouvements: l.mouvements,
+      restant: l.restant,
+    });
+    row.eachCell((cell) => (cell.border = THIN_BORDER));
+    // Restant en rouge si rupture, orange si stock faible.
+    if (l.restant <= 0) {
+      row.getCell("restant").font = { color: { argb: "FFCC0000" }, bold: true };
+    } else if (l.restant <= 3) {
+      row.getCell("restant").font = { color: { argb: "FFB25000" }, bold: true };
+    }
+  }
+
+  const totalRow = sheet.addRow({
+    reference: "",
+    designation: "TOTAL",
+    stock_initial: sorted.reduce((s, l) => s + l.stock_initial, 0),
+    vendu: sorted.reduce((s, l) => s + l.vendu, 0),
+    mouvements: sorted.reduce((s, l) => s + l.mouvements, 0),
+    restant: sorted.reduce((s, l) => s + l.restant, 0),
+  });
+  styleTotalRow(totalRow);
+
+  sheet.autoFilter = { from: "A1", to: "F1" };
+  return workbook.xlsx.writeBuffer();
+}
+
+export async function generateMouvementsExport(
+  eventNom: string,
+  mouvements: MouvementStock[]
+): Promise<ExcelJS.Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Caisse événementielle C.A.M.P. France";
+  workbook.created = new Date();
+
+  const labelByType = new Map(MOUVEMENT_TYPES.map((t) => [t.value, t.label]));
+
+  const sheet = workbook.addWorksheet("Mouvements de stock");
+  const centered = { alignment: { horizontal: "center" as const } };
+  sheet.columns = [
+    { header: "Date", key: "date", width: 20 },
+    { header: "Référence", key: "reference", width: 14 },
+    { header: "Désignation", key: "designation", width: 40 },
+    { header: "Type", key: "type", width: 20 },
+    { header: "Quantité", key: "quantite", width: 10, style: centered },
+    { header: "Motif / bénéficiaire", key: "motif", width: 28 },
+    { header: "Saisi par", key: "by", width: 14 },
+  ];
+  styleHeaderRow(sheet.getRow(1));
+
+  const sorted = [...mouvements].sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+  for (const m of sorted) {
+    const row = sheet.addRow({
+      date: formatDateTimeFR(m.created_at),
+      reference: m.reference,
+      designation: m.designation,
+      type: labelByType.get(m.type) ?? m.type,
+      quantite: m.quantite,
+      motif: m.motif ?? "",
+      by: m.created_by ?? "",
+    });
+    row.eachCell((cell) => (cell.border = THIN_BORDER));
+  }
+
+  sheet.autoFilter = { from: "A1", to: "G1" };
+  return workbook.xlsx.writeBuffer();
 }

@@ -169,6 +169,18 @@ export default function MouvementsPage() {
       </div>
 
       {mouvements.length > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">Historique ({mouvements.length})</p>
+          <a
+            href={`/api/mouvements/export?event_id=${event.id}`}
+            className="rounded-lg border border-black/15 bg-white px-3 py-1.5 text-sm font-medium"
+          >
+            Export Excel
+          </a>
+        </div>
+      )}
+
+      {mouvements.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-black/10 bg-white">
           <table className="w-full text-sm">
             <thead>

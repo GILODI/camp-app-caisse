@@ -72,6 +72,12 @@ export default function StockPage() {
           <option value="restant">Trier par stock restant</option>
           <option value="designation">Trier par nom</option>
         </select>
+        <a
+          href={`/api/stock/export?event_id=${event.id}`}
+          className="rounded-lg border border-black/15 bg-white px-3 py-2 text-sm font-medium"
+        >
+          Export Excel
+        </a>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-black/10 bg-white">

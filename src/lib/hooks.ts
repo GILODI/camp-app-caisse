@@ -3,7 +3,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabaseBrowser } from "./supabase/client";
 import { todayParisISO } from "./date";
+import { computeStockLines, type StockLine } from "./stock";
 import type { CatalogueItem, EventRow, TicketWithItems, Vendeur } from "./types";
+
+// Ré-export pour compatibilité avec les composants important StockLine depuis ce module.
+export type { StockLine } from "./stock";
 
 export function useActiveEvent() {
   const [event, setEvent] = useState<EventRow | null>(null);
@@ -137,19 +141,10 @@ export function useTodaySales(eventId: string | undefined) {
   return { tickets, loading, venteDate, reload: load };
 }
 
-export interface StockLine {
-  reference: string;
-  designation: string;
-  stock_initial: number;
-  vendu: number;
-  mouvements: number;
-  restant: number;
-}
-
 // Stock restant par produit suivi (stock_initial renseigné) :
 // restant = stock_initial - quantités vendues (tickets validés) - mouvements
 // (vol/dotation/casse). Se rafraîchit en direct via Realtime sur les tickets
-// et les mouvements.
+// et les mouvements. Le calcul est partagé avec l'export (voir lib/stock.ts).
 export function useStock(eventId: string | undefined) {
   const [stock, setStock] = useState<Map<string, StockLine>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -174,35 +169,14 @@ export function useStock(eventId: string | undefined) {
       supabaseBrowser.from("mouvements_stock").select("reference, quantite").eq("event_id", eventId),
     ]);
 
-    const venduByRef = new Map<string, number>();
+    const ventes: { reference: string; quantite: number }[] = [];
     for (const t of tickets ?? []) {
       const items = (t as { ticket_items?: { reference: string; quantite: number }[] }).ticket_items ?? [];
-      for (const it of items) {
-        venduByRef.set(it.reference, (venduByRef.get(it.reference) ?? 0) + it.quantite);
-      }
+      ventes.push(...items);
     }
 
-    const mvtByRef = new Map<string, number>();
-    for (const m of mouvements ?? []) {
-      mvtByRef.set(m.reference, (mvtByRef.get(m.reference) ?? 0) + m.quantite);
-    }
-
-    const map = new Map<string, StockLine>();
-    for (const c of catalogue ?? []) {
-      if (c.stock_initial === null || c.stock_initial === undefined) continue; // produit non suivi
-      const vendu = venduByRef.get(c.reference) ?? 0;
-      const mvt = mvtByRef.get(c.reference) ?? 0;
-      map.set(c.reference, {
-        reference: c.reference,
-        designation: c.designation,
-        stock_initial: c.stock_initial,
-        vendu,
-        mouvements: mvt,
-        restant: c.stock_initial - vendu - mvt,
-      });
-    }
-
-    setStock(map);
+    const lines = computeStockLines(catalogue ?? [], ventes, mouvements ?? []);
+    setStock(new Map(lines.map((l) => [l.reference, l])));
     setLoading(false);
   }, [eventId]);
 
