@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
   const prixCol = formData.get("prixCol");
   const pvpTtcCol = formData.get("pvpTtcCol");
   const stockCol = formData.get("stockCol");
+  const barcodeCol = formData.get("barcodeCol");
   const mode = formData.get("mode"); // "replace" | "append_or_update"
 
   if (!(file instanceof File) || typeof event_id !== "string") {
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
       prixCol,
       pvpTtcCol: typeof pvpTtcCol === "string" && pvpTtcCol ? pvpTtcCol : null,
       stockCol: typeof stockCol === "string" && stockCol ? stockCol : null,
+      barcodeCol: typeof barcodeCol === "string" && barcodeCol ? barcodeCol : null,
     });
 
     if (items.length === 0) {

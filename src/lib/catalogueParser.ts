@@ -12,6 +12,7 @@ export interface ColumnMapping {
   prixCol: string;
   pvpTtcCol: string | null;
   stockCol: string | null;
+  barcodeCol: string | null;
 }
 
 export interface CatalogueRowResult {
@@ -20,6 +21,7 @@ export interface CatalogueRowResult {
   prix_ttc: number;
   pvp_ttc: number | null;
   stock_initial: number | null;
+  code_barre: string | null;
 }
 
 export interface BuildResult {
@@ -162,6 +164,7 @@ export function guessMapping(headers: string[]): {
   prixCol: string | null;
   pvpTtcCol: string | null;
   stockCol: string | null;
+  barcodeCol: string | null;
 } {
   const normalized = headers.map((h) => ({ raw: h, norm: normalize(h) }));
 
@@ -193,7 +196,12 @@ export function guessMapping(headers: string[]): {
     (n) => n.includes("stock") || n.includes("quantite") || n.includes("qte") || n === "qty"
   );
 
-  return { referenceCol, designationCol, prixCol, pvpTtcCol, stockCol };
+  // Code-barres EAN/UPC/gencod, optionnel.
+  const barcodeCol = find(
+    (n) => n.includes("ean") || n.includes("code barre") || n.includes("gencod") || n.includes("upc") || n === "cab"
+  );
+
+  return { referenceCol, designationCol, prixCol, pvpTtcCol, stockCol, barcodeCol };
 }
 
 const STRIP_CHARS_RE = new RegExp("[€\\s\\u00A0]", "g");
@@ -224,6 +232,7 @@ export function buildCatalogueItems(rows: Record<string, string>[], mapping: Col
     const prixRaw = row[mapping.prixCol]?.trim();
     const pvpTtcRaw = mapping.pvpTtcCol ? row[mapping.pvpTtcCol]?.trim() : undefined;
     const stockRaw = mapping.stockCol ? row[mapping.stockCol]?.trim() : undefined;
+    const barcodeRaw = mapping.barcodeCol ? row[mapping.barcodeCol]?.trim() : undefined;
 
     if (!reference) {
       errors.push({ row: rowNumber, message: "Référence manquante — ligne ignorée" });
@@ -249,7 +258,14 @@ export function buildCatalogueItems(rows: Record<string, string>[], mapping: Col
       if (Number.isFinite(n) && n >= 0) stock_initial = n;
     }
 
-    items.push({ reference, designation, prix_ttc, pvp_ttc, stock_initial });
+    // Code-barres optionnel : on ne garde que les chiffres (EAN/UPC), sinon null.
+    let code_barre: string | null = null;
+    if (barcodeRaw) {
+      const digits = barcodeRaw.replace(/\D/g, "");
+      if (digits.length >= 8) code_barre = digits;
+    }
+
+    items.push({ reference, designation, prix_ttc, pvp_ttc, stock_initial, code_barre });
   });
 
   return { items, errors };

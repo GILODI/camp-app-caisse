@@ -55,6 +55,7 @@ export interface CatalogueItem {
   prix_ttc: number;
   pvp_ttc: number | null;
   stock_initial: number | null;
+  code_barre: string | null;
 }
 
 export interface TicketItem {
