@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       p_event_id: event_id,
       p_type: type,
       p_comptage_date: type === "initial" ? null : comptage_date,
+      p_nb_billets_100: counts.nb_billets_100,
       p_nb_billets_50: counts.nb_billets_50,
       p_nb_billets_20: counts.nb_billets_20,
       p_nb_billets_10: counts.nb_billets_10,

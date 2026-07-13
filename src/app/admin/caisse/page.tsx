@@ -31,6 +31,18 @@ function computeTotal(counts: DenominationCounts): number {
 
 const EPSILON = 0.01;
 
+// Écart signé : "-10,00 €" si manque, "+10,00 €" si surplus, "0,00 €" si nul.
+function formatEcart(ecart: number): string {
+  const sign = ecart > 0 ? "+" : ecart < 0 ? "-" : "";
+  return `${sign}${Math.abs(ecart).toFixed(2)} €`;
+}
+
+function ecartClass(ecart: number): string {
+  if (ecart > EPSILON) return "text-green-600"; // surplus
+  if (ecart < -EPSILON) return "text-red-600"; // manque
+  return "";
+}
+
 export default function CaissePage() {
   const [eventId, setEventId] = useState<string | null>(null);
   const [eventNom, setEventNom] = useState("");
@@ -206,10 +218,10 @@ export default function CaissePage() {
                   <td className="px-3 py-2 text-right">{r.especes !== null ? `${r.especes.toFixed(2)} €` : "—"}</td>
                   <td
                     className={`px-3 py-2 text-right font-medium ${
-                      r.ecart !== null && Math.abs(r.ecart) > EPSILON ? "text-red-600" : ""
+                      r.ecart !== null ? ecartClass(r.ecart) : ""
                     }`}
                   >
-                    {r.ecart !== null ? `${r.ecart.toFixed(2)} €` : "—"}
+                    {r.ecart !== null ? formatEcart(r.ecart) : "—"}
                   </td>
                   <td className="px-3 py-2 text-right">
                     {r.key !== "initial" ? (
@@ -229,9 +241,7 @@ export default function CaissePage() {
                 <td className="px-3 py-2"></td>
                 <td className="px-3 py-2 text-right">{totalRecette.toFixed(2)} €</td>
                 <td className="px-3 py-2 text-right">{totalEspeces.toFixed(2)} €</td>
-                <td className={`px-3 py-2 text-right ${Math.abs(totalEcart) > EPSILON ? "text-red-600" : ""}`}>
-                  {totalEcart.toFixed(2)} €
-                </td>
+                <td className={`px-3 py-2 text-right ${ecartClass(totalEcart)}`}>{formatEcart(totalEcart)}</td>
                 <td className="px-3 py-2"></td>
               </tr>
             </tbody>

@@ -143,6 +143,7 @@ create table if not exists public.caisse_comptages (
   event_id uuid not null references public.events(id) on delete cascade,
   type text not null check (type in ('initial', 'jour')),
   comptage_date date, -- null pour "initial", requis pour "jour"
+  nb_billets_100 integer not null default 0,
   nb_billets_50 integer not null default 0,
   nb_billets_20 integer not null default 0,
   nb_billets_10 integer not null default 0,
@@ -154,7 +155,7 @@ create table if not exists public.caisse_comptages (
   nb_pieces_010 integer not null default 0,
   nb_pieces_005 integer not null default 0,
   total_compte numeric(10,2) generated always as (
-    nb_billets_50 * 50 + nb_billets_20 * 20 + nb_billets_10 * 10 + nb_billets_5 * 5 +
+    nb_billets_100 * 100 + nb_billets_50 * 50 + nb_billets_20 * 20 + nb_billets_10 * 10 + nb_billets_5 * 5 +
     nb_pieces_2 * 2 + nb_pieces_1 * 1 + nb_pieces_050 * 0.5 + nb_pieces_020 * 0.2 +
     nb_pieces_010 * 0.1 + nb_pieces_005 * 0.05
   ) stored,
@@ -311,7 +312,10 @@ create or replace function public.save_comptage(
   p_nb_pieces_020 integer,
   p_nb_pieces_010 integer,
   p_nb_pieces_005 integer,
-  p_by text
+  p_by text,
+  -- Ajouté après p_by (avec défaut) pour rester rétro-compatible avec un
+  -- appel qui ne fournirait pas encore le billet de 100.
+  p_nb_billets_100 integer default 0
 )
 returns public.caisse_comptages
 language plpgsql
@@ -321,15 +325,16 @@ declare
 begin
   if p_type = 'initial' then
     insert into public.caisse_comptages (
-      event_id, type, comptage_date, nb_billets_50, nb_billets_20, nb_billets_10, nb_billets_5,
+      event_id, type, comptage_date, nb_billets_100, nb_billets_50, nb_billets_20, nb_billets_10, nb_billets_5,
       nb_pieces_2, nb_pieces_1, nb_pieces_050, nb_pieces_020, nb_pieces_010, nb_pieces_005, created_by
     )
     values (
-      p_event_id, 'initial', null, p_nb_billets_50, p_nb_billets_20, p_nb_billets_10, p_nb_billets_5,
+      p_event_id, 'initial', null, p_nb_billets_100, p_nb_billets_50, p_nb_billets_20, p_nb_billets_10, p_nb_billets_5,
       p_nb_pieces_2, p_nb_pieces_1, p_nb_pieces_050, p_nb_pieces_020, p_nb_pieces_010, p_nb_pieces_005, p_by
     )
     on conflict (event_id) where type = 'initial'
     do update set
+      nb_billets_100 = excluded.nb_billets_100,
       nb_billets_50 = excluded.nb_billets_50,
       nb_billets_20 = excluded.nb_billets_20,
       nb_billets_10 = excluded.nb_billets_10,
@@ -349,15 +354,16 @@ begin
     end if;
 
     insert into public.caisse_comptages (
-      event_id, type, comptage_date, nb_billets_50, nb_billets_20, nb_billets_10, nb_billets_5,
+      event_id, type, comptage_date, nb_billets_100, nb_billets_50, nb_billets_20, nb_billets_10, nb_billets_5,
       nb_pieces_2, nb_pieces_1, nb_pieces_050, nb_pieces_020, nb_pieces_010, nb_pieces_005, created_by
     )
     values (
-      p_event_id, 'jour', p_comptage_date, p_nb_billets_50, p_nb_billets_20, p_nb_billets_10, p_nb_billets_5,
+      p_event_id, 'jour', p_comptage_date, p_nb_billets_100, p_nb_billets_50, p_nb_billets_20, p_nb_billets_10, p_nb_billets_5,
       p_nb_pieces_2, p_nb_pieces_1, p_nb_pieces_050, p_nb_pieces_020, p_nb_pieces_010, p_nb_pieces_005, p_by
     )
     on conflict (event_id, comptage_date) where type = 'jour'
     do update set
+      nb_billets_100 = excluded.nb_billets_100,
       nb_billets_50 = excluded.nb_billets_50,
       nb_billets_20 = excluded.nb_billets_20,
       nb_billets_10 = excluded.nb_billets_10,

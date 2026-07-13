@@ -6,6 +6,11 @@ import type { StockLine } from "./stock";
 import { formatDateFR, formatDateTimeFR } from "./date";
 
 const CURRENCY_FMT = '#,##0.00 "€"';
+// Écart signé : "+10,00 €" (positif) / "-10,00 €" (négatif) / "0,00 €".
+const ECART_FMT = '+#,##0.00 "€";-#,##0.00 "€";0.00 "€"';
+const GREEN_FONT: Partial<ExcelJS.Font> = { color: { argb: "FF15803D" }, bold: true };
+const RED_FONT: Partial<ExcelJS.Font> = { color: { argb: "FFCC0000" }, bold: true };
+const WHITE_FILL: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFFF" } };
 
 const HEADER_FILL: ExcelJS.Fill = {
   type: "pattern",
@@ -298,10 +303,11 @@ function buildCaisseSyntheseSheet(workbook: ExcelJS.Workbook, eventNom: string, 
     row.getCell(2).numFmt = CURRENCY_FMT;
     if (r.recette !== null) row.getCell(3).numFmt = CURRENCY_FMT;
     if (r.especes !== null) row.getCell(4).numFmt = CURRENCY_FMT;
-    if (r.ecart !== null) row.getCell(5).numFmt = CURRENCY_FMT;
     row.eachCell((cell) => (cell.border = THIN_BORDER));
-    if (r.ecart !== null && Math.abs(r.ecart) > 0.01) {
-      row.getCell(5).font = { color: { argb: "FFCC0000" }, bold: true };
+    if (r.ecart !== null) {
+      row.getCell(5).numFmt = ECART_FMT;
+      if (r.ecart > 0.01) row.getCell(5).font = GREEN_FONT; // surplus
+      else if (r.ecart < -0.01) row.getCell(5).font = RED_FONT; // manque
     }
     totalRecette += r.recette ?? 0;
     totalEspeces += r.especes ?? 0;
@@ -311,8 +317,12 @@ function buildCaisseSyntheseSheet(workbook: ExcelJS.Workbook, eventNom: string, 
   const totalRow = sheet.addRow(["TOTAL ÉVÉNEMENT", null, totalRecette, totalEspeces, totalEcart]);
   totalRow.getCell(3).numFmt = CURRENCY_FMT;
   totalRow.getCell(4).numFmt = CURRENCY_FMT;
-  totalRow.getCell(5).numFmt = CURRENCY_FMT;
   styleTotalRow(totalRow);
+  // Écart du total : même règle de couleur, sur fond blanc pour rester lisible.
+  const totalEcartCell = totalRow.getCell(5);
+  totalEcartCell.numFmt = ECART_FMT;
+  totalEcartCell.fill = WHITE_FILL;
+  totalEcartCell.font = totalEcart > 0.01 ? GREEN_FONT : totalEcart < -0.01 ? RED_FONT : { bold: true };
 }
 
 function buildCaisseDetailSheet(workbook: ExcelJS.Workbook, comptages: CaisseComptage[]) {
@@ -321,7 +331,7 @@ function buildCaisseDetailSheet(workbook: ExcelJS.Workbook, comptages: CaisseCom
 
   sheet.columns = [
     { header: "Comptage", key: "label", width: 18 },
-    ...DENOMINATIONS.map((d) => ({ header: d.label, key: d.key, width: 12, style: centered })),
+    ...DENOMINATIONS.map((d) => ({ header: d.short, key: d.key, width: 9, style: centered })),
     { header: "Total compté (€)", key: "total", width: 16 },
     { header: "Saisi par", key: "by", width: 16 },
     { header: "Dernière mise à jour", key: "updated", width: 20 },
