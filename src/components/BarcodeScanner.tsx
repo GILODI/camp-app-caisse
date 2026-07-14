@@ -53,7 +53,7 @@ export function BarcodeScanner({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
       <div className="flex items-center justify-between px-4 py-3 text-white">
-        <span className="font-semibold">Scanner un code-barres</span>
+        <span className="font-semibold">Scanner un code-barre</span>
         <button onClick={onClose} className="rounded-md bg-white/15 px-3 py-1.5 text-sm">
           Fermer
         </button>

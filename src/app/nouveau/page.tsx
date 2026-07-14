@@ -270,7 +270,7 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
         <button
           type="button"
           onClick={() => setScanning(true)}
-          aria-label="Scanner un code-barres"
+          aria-label="Scanner un code-barre"
           className="shrink-0 rounded-lg border border-black/15 bg-white px-4 text-2xl"
         >
           📷
