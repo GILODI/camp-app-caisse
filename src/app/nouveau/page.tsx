@@ -187,8 +187,6 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
     const text = buildReceiptText({
       eventNom: event.nom,
       numero: result.numero,
-      venteDate: result.vente_date,
-      vendeur,
       lines,
       mode,
       total: Number(result.total_ttc),
