@@ -66,6 +66,22 @@ export default function ExportPage() {
           Télécharger le fichier Excel
         </a>
       </div>
+
+      <div className="space-y-2 rounded-xl border border-black/10 bg-white p-4">
+        <p className="text-sm font-medium">Archive complète de l&apos;événement</p>
+        <p className="text-xs text-black/50">
+          Un seul fichier : synthèse globale (toutes dates), détail de toutes les ventes, état du stock, mouvements
+          et caisse espèces. À télécharger une fois l&apos;événement terminé.
+        </p>
+        <a
+          href={eventId ? `/api/export/archive?event_id=${eventId}` : undefined}
+          className={`block w-full rounded-lg border py-3 text-center font-semibold ${
+            eventId ? "border-brand text-brand" : "pointer-events-none border-black/10 text-black/30"
+          }`}
+        >
+          Télécharger l&apos;archive complète
+        </a>
+      </div>
     </div>
   );
 }

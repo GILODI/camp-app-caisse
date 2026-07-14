@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useActiveEvent, useStock } from "@/lib/hooks";
+import { STOCK_LOW_THRESHOLD } from "@/lib/stock";
 
 type SortKey = "restant" | "designation";
 
@@ -103,7 +104,7 @@ export default function StockPage() {
                 <td className="px-3 py-2 text-right">{l.mouvements || "—"}</td>
                 <td
                   className={`px-3 py-2 text-right font-semibold ${
-                    l.restant <= 0 ? "text-red-600" : l.restant <= 3 ? "text-amber-600" : ""
+                    l.restant <= 0 ? "text-red-600" : l.restant <= STOCK_LOW_THRESHOLD ? "text-amber-600" : ""
                   }`}
                 >
                   {l.restant}

@@ -1,3 +1,7 @@
+// Seuil en-dessous duquel un produit suivi est signalé comme "stock bas"
+// (badge orange, alerte à la vente). Rupture (rouge) = restant <= 0.
+export const STOCK_LOW_THRESHOLD = 3;
+
 export interface StockLine {
   reference: string;
   designation: string;
