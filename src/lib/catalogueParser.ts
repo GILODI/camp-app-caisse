@@ -187,18 +187,23 @@ export function guessMapping(headers: string[]): {
     find((n) => n.includes("prix"));
 
   // PVP TTC (prix public avant remise) : colonne distincte de celle déjà
-  // choisie comme prix de vente, utile pour le récap fin de journée.
+  // choisie comme prix de vente, utile pour le récap fin de journée. "PVC"
+  // (Prix de Vente Conseillé) est un intitulé equivalent vu sur le
+  // Référentiel Stand réel.
   const pvpTtcCol =
-    find((n) => n.includes("pvp"), prixCol) ?? find((n) => n.includes("prix ttc") || n.includes("prix"), prixCol);
+    find((n) => n.includes("pvp") || n === "pvc", prixCol) ??
+    find((n) => n.includes("prix ttc") || n.includes("prix"), prixCol);
 
   // Stock initial (quantité en stock au départ), optionnel.
   const stockCol = find(
     (n) => n.includes("stock") || n.includes("quantite") || n.includes("qte") || n === "qty"
   );
 
-  // Code-barres EAN/UPC/gencod, optionnel.
+  // Code-barres EAN/UPC/gencod, optionnel. On matche "barr" (pas "code
+  // barre" en entier) pour tolérer les coquilles vues sur les fichiers
+  // réels (ex. "Code-BARRRE" avec un r en trop).
   const barcodeCol = find(
-    (n) => n.includes("ean") || n.includes("code barre") || n.includes("gencod") || n.includes("upc") || n === "cab"
+    (n) => n.includes("ean") || n.includes("barr") || n.includes("gencod") || n.includes("upc") || n === "cab"
   );
 
   return { referenceCol, designationCol, prixCol, pvpTtcCol, stockCol, barcodeCol };
