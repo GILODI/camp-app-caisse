@@ -16,6 +16,8 @@ export default function EvenementsPage() {
   const [editValue, setEditValue] = useState("");
   const [editingCodeId, setEditingCodeId] = useState<string | null>(null);
   const [codeValue, setCodeValue] = useState("");
+  const [confirmingResetId, setConfirmingResetId] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const load = useCallback(async () => {
     const { data } = await supabaseBrowser.from("events").select("*").order("created_at", { ascending: false });
@@ -80,6 +82,21 @@ export default function EvenementsPage() {
     }
   }
 
+  async function resetEventData(id: string) {
+    setResetting(true);
+    try {
+      const res = await fetch(`/api/events/${id}/reset`, { method: "POST" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error);
+      setConfirmingResetId(null);
+      toast.success("Données de vente vidées (tickets, factures, mouvements, comptages)");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setResetting(false);
+    }
+  }
+
   async function saveCode(id: string) {
     if (!codeValue.trim()) return;
     try {
@@ -132,7 +149,26 @@ export default function EvenementsPage() {
               key={ev.id}
               className="flex items-center justify-between gap-2 rounded-lg border border-black/10 bg-white p-3"
             >
-              {editingId === ev.id ? (
+              {confirmingResetId === ev.id ? (
+                <div className="flex flex-1 flex-col gap-2">
+                  <p className="text-sm text-red-700">
+                    Supprimer tous les tickets, factures, mouvements de stock et comptages caisse de « {ev.nom} » ?
+                    Le catalogue n&apos;est pas touché. Irréversible.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => resetEventData(ev.id)}
+                      disabled={resetting}
+                      className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                    >
+                      {resetting ? "Suppression…" : "Confirmer la suppression"}
+                    </button>
+                    <button onClick={() => setConfirmingResetId(null)} className="px-2 text-xs text-black/50">
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              ) : editingId === ev.id ? (
                 <div className="flex flex-1 gap-2">
                   <input
                     value={editValue}
@@ -217,6 +253,12 @@ export default function EvenementsPage() {
                         Activer
                       </button>
                     )}
+                    <button
+                      onClick={() => setConfirmingResetId(ev.id)}
+                      className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600"
+                    >
+                      Vider les données
+                    </button>
                   </div>
                 </>
               )}
