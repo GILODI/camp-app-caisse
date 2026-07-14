@@ -12,6 +12,7 @@ import { ProductAutocomplete } from "@/components/ProductAutocomplete";
 import { TicketLinesEditor } from "@/components/TicketLinesEditor";
 import { PaymentMethodPicker } from "@/components/PaymentMethodPicker";
 import { EventCodeGate } from "@/components/EventCodeGate";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 import type { CatalogueItem, DraftLine, EventRow, PaymentMethod, TicketWithItems } from "@/lib/types";
 
 function NouveauTicketContent() {
@@ -68,6 +69,7 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
   const [pendingLocalId, setPendingLocalId] = useState<string | null>(null);
   const [result, setResult] = useState<TicketResult | null>(null);
   const [correctingSource, setCorrectingSource] = useState<TicketWithItems | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
     if (!correctId) return;
@@ -141,6 +143,18 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
 
   function changePrice(key: string, prix: number) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, prix_unitaire: prix } : l)));
+  }
+
+  function handleScan(code: string) {
+    setScanning(false);
+    const digits = code.replace(/\D/g, "");
+    const item = catalogue.find((c) => c.code_barre && c.code_barre === digits);
+    if (item) {
+      addItem(item);
+      toast.success(`${item.designation} ajouté`);
+    } else {
+      toast.error(`Code-barres non reconnu (${digits}). Cherche le produit manuellement.`);
+    }
   }
 
   function removeLine(key: string) {
@@ -249,7 +263,21 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
         </div>
       )}
 
-      <ProductAutocomplete items={catalogue} stock={stock} onSelect={addItem} />
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <ProductAutocomplete items={catalogue} stock={stock} onSelect={addItem} />
+        </div>
+        <button
+          type="button"
+          onClick={() => setScanning(true)}
+          aria-label="Scanner un code-barre"
+          className="shrink-0 rounded-lg border border-black/15 bg-white px-4 text-2xl"
+        >
+          📷
+        </button>
+      </div>
+
+      {scanning && <BarcodeScanner onDetected={handleScan} onClose={() => setScanning(false)} />}
 
       <TicketLinesEditor
         lines={lines}

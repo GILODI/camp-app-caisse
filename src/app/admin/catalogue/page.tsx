@@ -15,6 +15,7 @@ interface PreviewData {
     prixCol: string | null;
     pvpTtcCol: string | null;
     stockCol: string | null;
+    barcodeCol: string | null;
   };
 }
 
@@ -35,6 +36,7 @@ export default function CataloguePage() {
     prixCol: "",
     pvpTtcCol: "",
     stockCol: "",
+    barcodeCol: "",
   });
   const [mode, setMode] = useState<"append_or_update" | "replace">("append_or_update");
   const [loading, setLoading] = useState(false);
@@ -57,6 +59,7 @@ export default function CataloguePage() {
         prixCol: body.guessed.prixCol ?? "",
         pvpTtcCol: body.guessed.pvpTtcCol ?? "",
         stockCol: body.guessed.stockCol ?? "",
+        barcodeCol: body.guessed.barcodeCol ?? "",
       });
     } catch (err) {
       toast.error((err as Error).message);
@@ -82,6 +85,7 @@ export default function CataloguePage() {
       formData.append("prixCol", mapping.prixCol);
       formData.append("pvpTtcCol", mapping.pvpTtcCol);
       formData.append("stockCol", mapping.stockCol);
+      formData.append("barcodeCol", mapping.barcodeCol);
       formData.append("mode", mode);
       const res = await fetch("/api/catalogue/import", { method: "POST", body: formData });
       const body = await res.json();
@@ -166,6 +170,13 @@ export default function CataloguePage() {
             value={mapping.stockCol}
             headers={preview.headers}
             onChange={(v) => setMapping((m) => ({ ...m, stockCol: v }))}
+            optional
+          />
+          <MappingSelect
+            label="Code-barres / EAN (optionnel)"
+            value={mapping.barcodeCol}
+            headers={preview.headers}
+            onChange={(v) => setMapping((m) => ({ ...m, barcodeCol: v }))}
             optional
           />
 

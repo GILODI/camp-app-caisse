@@ -51,12 +51,15 @@ create table if not exists public.catalogue_items (
   pvp_ttc numeric(10,2),
   -- quantité initiale en stock (bon de commande) ; null = produit non suivi.
   stock_initial integer,
+  -- code-barres EAN/UPC, pour l'ajout au ticket par scan caméra.
+  code_barre text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (event_id, reference)
 );
 
 create index if not exists catalogue_items_event_idx on public.catalogue_items (event_id);
+create index if not exists catalogue_items_barcode_idx on public.catalogue_items (event_id, code_barre);
 
 -- ----------------------------------------------------------------------------
 -- ticket_counters : compteur atomique par (événement, jour de vente).
