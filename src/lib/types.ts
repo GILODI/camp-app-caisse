@@ -94,7 +94,7 @@ export interface TicketWithItems extends Ticket {
 export const VENDEUR_LEGAL = {
   raisonSociale: "C.A.M.P. FRANCE SARL",
   formeCapital: "SARL au capital de 65 000 €",
-  adresse: "1800, Rue André Lasquin, ZI du Vieux Pont",
+  adresse: "1800, Avenue André Lasquin",
   codePostalVille: "74700 Sallanches",
   siret: "343 953 451 00022",
   rcs: "RCS Annecy 343 953 451",
