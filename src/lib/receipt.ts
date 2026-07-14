@@ -23,7 +23,7 @@ function formatLigne(l: DraftLine): string {
   if (l.pvp_ttc !== null && Math.abs(l.pvp_ttc - l.prix_unitaire) > 0.001) {
     const pvcTotal = l.pvp_ttc * l.quantite;
     const remisePct = Math.round((1 - l.prix_unitaire / l.pvp_ttc) * 100);
-    return `${header} — ${totalLigne.toFixed(2)} €\n   (PVC ${pvcTotal.toFixed(2)} €, -${remisePct}%)`;
+    return `${header} — ${totalLigne.toFixed(2)} €\n   (PVC ${pvcTotal.toFixed(2)} €, Remise ${remisePct}%)`;
   }
   return `${header} — ${totalLigne.toFixed(2)} €`;
 }
