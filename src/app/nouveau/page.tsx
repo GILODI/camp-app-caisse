@@ -15,7 +15,9 @@ import { PaymentMethodPicker } from "@/components/PaymentMethodPicker";
 import { EventCodeGate } from "@/components/EventCodeGate";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { CashChangeCalculator } from "@/components/CashChangeCalculator";
-import type { CatalogueItem, DraftLine, EventRow, PaymentMethod, TicketWithItems } from "@/lib/types";
+import { FactureDialog } from "@/components/FactureDialog";
+import { buildReceiptText } from "@/lib/receipt";
+import type { CatalogueItem, DraftLine, EventRow, Facture, PaymentMethod, TicketWithItems } from "@/lib/types";
 
 function NouveauTicketContent() {
   const { event, loading: eventLoading } = useActiveEvent();
@@ -72,6 +74,8 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
   const [result, setResult] = useState<TicketResult | null>(null);
   const [correctingSource, setCorrectingSource] = useState<TicketWithItems | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [showFactureDialog, setShowFactureDialog] = useState(false);
+  const [facture, setFacture] = useState<Facture | null>(null);
 
   useEffect(() => {
     if (!correctId) return;
@@ -178,12 +182,64 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
     setLines((prev) => prev.filter((l) => l.key !== key));
   }
 
+  async function handleSendReceipt() {
+    if (!result || !mode) return;
+    const text = buildReceiptText({
+      eventNom: event.nom,
+      numero: result.numero,
+      venteDate: result.vente_date,
+      vendeur,
+      lines,
+      mode,
+      total: Number(result.total_ttc),
+    });
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Reçu — ticket n° ${result.numero}`, text });
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") toast.error("Impossible de partager le reçu.");
+      }
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Reçu copié — colle-le dans un SMS, WhatsApp ou un e-mail.");
+    } catch {
+      toast.error("Impossible de copier le reçu.");
+    }
+  }
+
+  async function handleSendFacture() {
+    if (!facture) return;
+    try {
+      const res = await fetch(`/api/factures/${facture.id}`);
+      if (!res.ok) throw new Error("Impossible de récupérer la facture");
+      const blob = await res.blob();
+      const file = new File([blob], `${facture.numero_affiche}.pdf`, { type: "application/pdf" });
+
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Facture ${facture.numero_affiche}` });
+        return;
+      }
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      // Partage impossible (navigateur trop ancien, erreur réseau...) : on
+      // retombe sur l'ouverture du PDF, que le vendeur peut alors partager
+      // manuellement depuis le lecteur PDF du téléphone.
+    }
+    window.open(`/api/factures/${facture.id}`, "_blank");
+  }
+
   function resetForm() {
     setLines([]);
     setMode(null);
     setResult(null);
     setPendingLocalId(null);
     setCorrectingSource(null);
+    setFacture(null);
+    setShowFactureDialog(false);
     router.replace("/nouveau");
   }
 
@@ -247,11 +303,46 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
           Note ce numéro au dos du reçu CB si besoin. Vendeur : {vendeur}
         </p>
         <button
+          onClick={handleSendReceipt}
+          className="w-full rounded-lg border border-brand py-3.5 text-lg font-semibold text-brand"
+        >
+          📤 Envoyer le reçu au client
+        </button>
+
+        {facture ? (
+          <button
+            onClick={handleSendFacture}
+            className="w-full rounded-lg border border-black/15 py-3.5 text-lg font-semibold text-foreground"
+          >
+            📤 Envoyer la facture {facture.numero_affiche}
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowFactureDialog(true)}
+            className="w-full rounded-lg border border-black/15 py-3.5 text-lg font-semibold text-foreground"
+          >
+            🧾 Le client demande une facture
+          </button>
+        )}
+
+        <button
           onClick={resetForm}
           className="w-full rounded-lg bg-brand-dark py-3.5 text-lg font-semibold text-white"
         >
           Nouveau ticket
         </button>
+
+        {showFactureDialog && (
+          <FactureDialog
+            ticketId={result.id}
+            vendeur={vendeur}
+            onClose={() => setShowFactureDialog(false)}
+            onCreated={(f) => {
+              setFacture(f);
+              setShowFactureDialog(false);
+            }}
+          />
+        )}
       </div>
     );
   }

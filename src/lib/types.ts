@@ -90,6 +90,52 @@ export interface TicketWithItems extends Ticket {
   ticket_items: TicketItem[];
 }
 
+// Coordonnées légales C.A.M.P. FRANCE, utilisées sur les factures.
+export const VENDEUR_LEGAL = {
+  raisonSociale: "C.A.M.P. FRANCE SARL",
+  formeCapital: "SARL au capital de 65 000 €",
+  adresse: "1800, Avenue André Lasquin",
+  codePostalVille: "74700 Sallanches",
+  siret: "343 953 451 00022",
+  rcs: "RCS Annecy 343 953 451",
+  tvaIntraco: "FR70343953451",
+  tel: "+33 4 50 93 74 05",
+  email: "contact@campfrance.fr",
+  web: "https://camp-france.fr",
+} as const;
+
+// Taux de TVA par défaut appliqué aux factures (matériel outdoor/travail en
+// hauteur : taux standard, pas de taux réduit applicable).
+export const TAUX_TVA_DEFAUT = 20;
+
+export interface Facture {
+  id: string;
+  ticket_id: string;
+  event_id: string;
+  annee: number;
+  numero_seq: number;
+  numero_affiche: string;
+  client_nom: string;
+  client_adresse: string;
+  client_siret: string | null;
+  client_tva_intraco: string | null;
+  taux_tva: number;
+  total_ht: number;
+  montant_tva: number;
+  total_ttc: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface NewFacturePayload {
+  client_nom: string;
+  client_adresse: string;
+  client_siret?: string;
+  client_tva_intraco?: string;
+  taux_tva?: number;
+  by: string;
+}
+
 // Ligne saisie côté client avant validation du ticket (pas encore d'id serveur).
 export interface DraftLine {
   key: string;
