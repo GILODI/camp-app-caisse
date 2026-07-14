@@ -36,6 +36,11 @@ const LINKS = [
     title: "Mouvements de stock",
     desc: "Enregistrer une dotation, un vol ou une casse (sortie hors vente).",
   },
+  {
+    href: "/admin/factures",
+    title: "Factures émises",
+    desc: "Retrouver et retélécharger les factures déjà émises, par événement.",
+  },
 ];
 
 export default function AdminPage() {
