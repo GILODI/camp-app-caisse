@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useActiveEvent, useCatalogue, useStock } from "@/lib/hooks";
+import { STOCK_LOW_THRESHOLD } from "@/lib/stock";
 import { getStoredVendeur } from "@/lib/currentVendeur";
 import { getTicketQueue, type TicketResult } from "@/lib/offlineQueue";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -13,6 +14,7 @@ import { TicketLinesEditor } from "@/components/TicketLinesEditor";
 import { PaymentMethodPicker } from "@/components/PaymentMethodPicker";
 import { EventCodeGate } from "@/components/EventCodeGate";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { CashChangeCalculator } from "@/components/CashChangeCalculator";
 import type { CatalogueItem, DraftLine, EventRow, PaymentMethod, TicketWithItems } from "@/lib/types";
 
 function NouveauTicketContent() {
@@ -113,7 +115,22 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
 
   const total = lines.reduce((sum, l) => sum + l.prix_unitaire * l.quantite, 0);
 
+  const lowStockLines = Array.from(stock.values())
+    .filter((l) => l.restant <= STOCK_LOW_THRESHOLD)
+    .sort((a, b) => a.restant - b.restant);
+
   function addItem(item: CatalogueItem) {
+    const line = stock.get(item.reference);
+    if (line) {
+      const dejaDansLePanier = lines.find((l) => l.reference === item.reference)?.quantite ?? 0;
+      const restantApres = line.restant - dejaDansLePanier - 1;
+      if (restantApres <= 0) {
+        toast.warning(`Rupture : ${item.designation} — stock épuisé après cette vente.`);
+      } else if (restantApres <= STOCK_LOW_THRESHOLD) {
+        toast.warning(`Stock bas : ${item.designation} — ${restantApres} restant(s) après cette vente.`);
+      }
+    }
+
     setLines((prev) => {
       const existing = prev.find((l) => l.reference === item.reference);
       if (existing) {
@@ -263,6 +280,21 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
         </div>
       )}
 
+      {lowStockLines.length > 0 && (
+        <details className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <summary className="cursor-pointer font-medium">
+            ⚠️ {lowStockLines.length} produit{lowStockLines.length > 1 ? "s" : ""} en stock bas ou en rupture
+          </summary>
+          <ul className="mt-2 space-y-0.5">
+            {lowStockLines.map((l) => (
+              <li key={l.reference}>
+                {l.designation} : {l.restant <= 0 ? "rupture" : `${l.restant} restant(s)`}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
       <div className="flex gap-2">
         <div className="flex-1">
           <ProductAutocomplete items={catalogue} stock={stock} onSelect={addItem} />
@@ -295,6 +327,8 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
         <p className="mb-2 text-sm font-medium text-black/60">Mode de paiement</p>
         <PaymentMethodPicker value={mode} onChange={setMode} />
       </div>
+
+      {mode === "ESPECES" && <CashChangeCalculator total={total} />}
 
       <button
         onClick={handleSubmit}

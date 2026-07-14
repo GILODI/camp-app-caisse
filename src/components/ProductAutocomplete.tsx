@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { CatalogueItem } from "@/lib/types";
 import type { StockLine } from "@/lib/hooks";
+import { STOCK_LOW_THRESHOLD } from "@/lib/stock";
 
 function normalize(s: string): string {
   return s
@@ -77,7 +78,7 @@ export function ProductAutocomplete({
 function StockBadge({ line }: { line?: StockLine }) {
   if (!line) return null; // produit non suivi en stock
   const color =
-    line.restant <= 0 ? "text-red-600" : line.restant <= 3 ? "text-amber-600" : "text-black/50";
+    line.restant <= 0 ? "text-red-600" : line.restant <= STOCK_LOW_THRESHOLD ? "text-amber-600" : "text-black/50";
   return (
     <span className={`ml-2 font-medium ${color}`}>
       · stock : {line.restant}

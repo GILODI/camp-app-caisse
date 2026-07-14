@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import type { CaisseComptage, MouvementStock, PaymentMethod, TicketWithItems } from "./types";
 import { DENOMINATIONS, MOUVEMENT_TYPES, PAYMENT_METHODS } from "./types";
 import type { CaisseRow } from "./caisseCalc";
-import type { StockLine } from "./stock";
+import { STOCK_LOW_THRESHOLD, type StockLine } from "./stock";
 import { formatDateFR, formatDateTimeFR } from "./date";
 
 const CURRENCY_FMT = '#,##0.00 "€"';
@@ -53,6 +53,10 @@ export function buildStockExportFilename(eventNom: string): string {
 
 export function buildMouvementsExportFilename(eventNom: string): string {
   return `Mouvements_Stock_${sanitizeFilenamePart(eventNom)}.xlsx`;
+}
+
+export function buildEventArchiveFilename(eventNom: string): string {
+  return `Archive_${sanitizeFilenamePart(eventNom)}.xlsx`;
 }
 
 function styleHeaderRow(row: ExcelJS.Row) {
@@ -354,6 +358,12 @@ export async function generateStockExport(eventNom: string, lines: StockLine[]):
   workbook.creator = "Caisse événementielle C.A.M.P. France";
   workbook.created = new Date();
 
+  buildStockSheet(workbook, lines);
+
+  return workbook.xlsx.writeBuffer();
+}
+
+function buildStockSheet(workbook: ExcelJS.Workbook, lines: StockLine[]) {
   const sheet = workbook.addWorksheet("État du stock");
   const centered = { alignment: { horizontal: "center" as const } };
   sheet.columns = [
@@ -380,7 +390,7 @@ export async function generateStockExport(eventNom: string, lines: StockLine[]):
     // Restant en rouge si rupture, orange si stock faible.
     if (l.restant <= 0) {
       row.getCell("restant").font = { color: { argb: "FFCC0000" }, bold: true };
-    } else if (l.restant <= 3) {
+    } else if (l.restant <= STOCK_LOW_THRESHOLD) {
       row.getCell("restant").font = { color: { argb: "FFB25000" }, bold: true };
     }
   }
@@ -396,7 +406,6 @@ export async function generateStockExport(eventNom: string, lines: StockLine[]):
   styleTotalRow(totalRow);
 
   sheet.autoFilter = { from: "A1", to: "F1" };
-  return workbook.xlsx.writeBuffer();
 }
 
 export async function generateMouvementsExport(
@@ -407,6 +416,12 @@ export async function generateMouvementsExport(
   workbook.creator = "Caisse événementielle C.A.M.P. France";
   workbook.created = new Date();
 
+  buildMouvementsSheet(workbook, mouvements);
+
+  return workbook.xlsx.writeBuffer();
+}
+
+function buildMouvementsSheet(workbook: ExcelJS.Workbook, mouvements: MouvementStock[]) {
   const labelByType = new Map(MOUVEMENT_TYPES.map((t) => [t.value, t.label]));
 
   const sheet = workbook.addWorksheet("Mouvements de stock");
@@ -437,5 +452,218 @@ export async function generateMouvementsExport(
   }
 
   sheet.autoFilter = { from: "A1", to: "G1" };
+}
+
+// Archive complète de fin d'événement : un seul fichier avec la synthèse
+// globale (toutes dates confondues), le détail de toutes les ventes, l'état
+// du stock, les mouvements et la caisse espèces — pour ne plus dépendre de
+// N exports séparés une fois l'événement terminé.
+export async function generateEventArchive(
+  eventNom: string,
+  allTickets: TicketWithItems[],
+  caisseRows: CaisseRow[],
+  comptages: CaisseComptage[],
+  stockLines: StockLine[],
+  mouvements: MouvementStock[]
+): Promise<ExcelJS.Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Caisse événementielle C.A.M.P. France";
+  workbook.created = new Date();
+
+  const valides = allTickets.filter((t) => t.statut === "VALIDE");
+
+  buildArchiveSyntheseSheet(workbook, eventNom, valides);
+  buildArchiveDetailSheet(workbook, allTickets);
+  if (caisseRows.length > 0) {
+    buildCaisseSyntheseSheet(workbook, eventNom, caisseRows);
+    buildCaisseDetailSheet(workbook, comptages);
+  }
+  if (stockLines.length > 0) buildStockSheet(workbook, stockLines);
+  if (mouvements.length > 0) buildMouvementsSheet(workbook, mouvements);
+
   return workbook.xlsx.writeBuffer();
+}
+
+function buildArchiveSyntheseSheet(workbook: ExcelJS.Workbook, eventNom: string, valides: TicketWithItems[]) {
+  const sheet = workbook.addWorksheet("Synthèse globale");
+  sheet.columns = [{ width: 22 }, { width: 16 }, { width: 16 }, { width: 18 }];
+
+  sheet.mergeCells("A1:D1");
+  const titleCell = sheet.getCell("A1");
+  titleCell.value = `${eventNom} — synthèse de l'événement`;
+  titleCell.font = { bold: true, size: 14 };
+  sheet.getRow(1).height = 24;
+
+  // ---- Tableau 1 : totaux par mode de paiement (toutes dates confondues) ----
+  sheet.getCell("A3").value = "Totaux par mode de paiement";
+  sheet.getCell("A3").font = { bold: true, size: 12 };
+
+  const t1Header = sheet.addRow(["Mode de paiement", "Nb tickets", "Nb articles", "Total TTC"]);
+  styleHeaderRow(t1Header);
+
+  let totalTickets = 0;
+  let totalArticles = 0;
+  let totalCA = 0;
+
+  const byMethod = new Map<PaymentMethod, { nbTickets: number; nbArticles: number; total: number }>();
+  for (const { value } of PAYMENT_METHODS) byMethod.set(value, { nbTickets: 0, nbArticles: 0, total: 0 });
+
+  const byDate = new Map<string, { nbTickets: number; total: number }>();
+
+  for (const ticket of valides) {
+    const stats = byMethod.get(ticket.mode_paiement)!;
+    stats.nbTickets += 1;
+    stats.total += Number(ticket.total_ttc);
+    const nbArticles = ticket.ticket_items.reduce((sum, item) => sum + item.quantite, 0);
+    stats.nbArticles += nbArticles;
+
+    const dateStats = byDate.get(ticket.vente_date) ?? { nbTickets: 0, total: 0 };
+    dateStats.nbTickets += 1;
+    dateStats.total += Number(ticket.total_ttc);
+    byDate.set(ticket.vente_date, dateStats);
+
+    totalTickets += 1;
+    totalArticles += nbArticles;
+    totalCA += Number(ticket.total_ttc);
+  }
+
+  for (const { value, label } of PAYMENT_METHODS) {
+    const stats = byMethod.get(value)!;
+    const row = sheet.addRow([label, stats.nbTickets, stats.nbArticles, stats.total]);
+    row.getCell(4).numFmt = CURRENCY_FMT;
+    row.eachCell((cell) => (cell.border = THIN_BORDER));
+  }
+
+  const totalRow = sheet.addRow(["TOTAL GÉNÉRAL", totalTickets, totalArticles, totalCA]);
+  totalRow.getCell(4).numFmt = CURRENCY_FMT;
+  styleTotalRow(totalRow);
+
+  // ---- Tableau 2 : répartition par jour ----
+  const t2TitleRowIdx = sheet.lastRow!.number + 2;
+  sheet.getCell(`A${t2TitleRowIdx}`).value = "Répartition par jour de vente";
+  sheet.getCell(`A${t2TitleRowIdx}`).font = { bold: true, size: 12 };
+
+  const t2Header = sheet.addRow(["Date", "Nb tickets", "", "Total TTC"]);
+  styleHeaderRow(t2Header);
+
+  const sortedDates = Array.from(byDate.keys()).sort();
+  for (const date of sortedDates) {
+    const stats = byDate.get(date)!;
+    const row = sheet.addRow([formatDateFR(date), stats.nbTickets, "", stats.total]);
+    row.getCell(4).numFmt = CURRENCY_FMT;
+    row.eachCell((cell) => (cell.border = THIN_BORDER));
+  }
+
+  // ---- Tableau 3 : statistiques rapides ----
+  const t3TitleRowIdx = sheet.lastRow!.number + 2;
+  sheet.getCell(`A${t3TitleRowIdx}`).value = "Statistiques rapides";
+  sheet.getCell(`A${t3TitleRowIdx}`).font = { bold: true, size: 12 };
+
+  const panierMoyen = totalTickets > 0 ? totalCA / totalTickets : 0;
+
+  const statRows: [string, number, string?][] = [
+    ["Nombre de tickets", totalTickets],
+    ["Nombre total d'articles", totalArticles],
+    ["Chiffre d'affaires total", totalCA, CURRENCY_FMT],
+    ["Panier moyen", panierMoyen, CURRENCY_FMT],
+  ];
+
+  let hasPvpData = false;
+  let totalRemise = 0;
+  for (const ticket of valides) {
+    for (const item of ticket.ticket_items) {
+      if (item.pvp_ttc !== null && item.pvp_ttc !== undefined) {
+        hasPvpData = true;
+        totalRemise += (Number(item.pvp_ttc) - Number(item.prix_unitaire)) * item.quantite;
+      }
+    }
+  }
+  if (hasPvpData) {
+    statRows.push(["Remise totale accordée", totalRemise, CURRENCY_FMT]);
+  }
+
+  for (const [label, value, fmt] of statRows) {
+    const row = sheet.addRow([label, value]);
+    row.getCell(1).font = { bold: true };
+    if (fmt) row.getCell(2).numFmt = fmt;
+    row.eachCell((cell) => (cell.border = THIN_BORDER));
+  }
+}
+
+function buildArchiveDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]) {
+  const sheet = workbook.addWorksheet("Saisie ventes");
+  const centered = { alignment: { horizontal: "center" as const } };
+  sheet.columns = [
+    { header: "Date", key: "date", width: 12, style: centered },
+    { header: "N° ticket", key: "numero", width: 12 },
+    { header: "Vendeur", key: "vendeur", width: 16, style: centered },
+    { header: "Référence", key: "reference", width: 16 },
+    { header: "Désignation", key: "designation", width: 32 },
+    { header: "Qté", key: "quantite", width: 8, style: centered },
+    { header: "PVP TTC", key: "pvpTtc", width: 12 },
+    { header: "PU (remisé)", key: "pu", width: 12 },
+    { header: "Total ligne", key: "totalLigne", width: 14 },
+    { header: "Remise %", key: "remise", width: 12, style: centered },
+    { header: "Mode de paiement", key: "modePaiement", width: 18 },
+    { header: "Statut", key: "statut", width: 12, style: centered },
+    { header: "Motif annulation", key: "motif", width: 24 },
+  ];
+  styleHeaderRow(sheet.getRow(1));
+
+  const labelByMethod = new Map(PAYMENT_METHODS.map((m) => [m.value, m.label]));
+
+  const sorted = [...tickets].sort((a, b) =>
+    a.vente_date === b.vente_date ? a.numero - b.numero : a.vente_date < b.vente_date ? -1 : 1
+  );
+
+  let shadeTicket = false;
+  let lastTicketId: string | null = null;
+
+  for (const ticket of sorted) {
+    if (ticket.id !== lastTicketId) {
+      shadeTicket = !shadeTicket;
+      lastTicketId = ticket.id;
+    }
+    for (const item of ticket.ticket_items) {
+      const pvpTtc = item.pvp_ttc === null || item.pvp_ttc === undefined ? null : Number(item.pvp_ttc);
+      const remise = pvpTtc === null || pvpTtc === 0 ? null : (pvpTtc - Number(item.prix_unitaire)) / pvpTtc;
+      const row = sheet.addRow({
+        date: formatDateFR(ticket.vente_date),
+        numero: ticket.numero,
+        vendeur: ticket.vendeur,
+        reference: item.reference,
+        designation: item.designation,
+        quantite: item.quantite,
+        pu: Number(item.prix_unitaire),
+        pvpTtc,
+        totalLigne: Number(item.total_ligne),
+        remise,
+        modePaiement: labelByMethod.get(ticket.mode_paiement) ?? ticket.mode_paiement,
+        statut: ticket.statut === "VALIDE" ? "Validé" : "Annulé",
+        motif: ticket.motif_annulation ?? "",
+      });
+      row.getCell("pu").numFmt = CURRENCY_FMT;
+      row.getCell("totalLigne").numFmt = CURRENCY_FMT;
+      if (pvpTtc !== null) {
+        row.getCell("pvpTtc").numFmt = CURRENCY_FMT;
+        row.getCell("remise").numFmt = "0.0%";
+      }
+      row.eachCell((cell) => {
+        cell.border = THIN_BORDER;
+        if (shadeTicket) cell.fill = BAND_FILL;
+      });
+      if (item.prix_modifie) {
+        const puCell = row.getCell("pu");
+        puCell.font = { color: { argb: "FFE65100" }, bold: true };
+        puCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE0B2" } };
+      }
+      if (ticket.statut === "ANNULE") {
+        row.eachCell((cell) => {
+          cell.font = { color: { argb: "FF999999" }, italic: true };
+        });
+      }
+    }
+  }
+
+  sheet.autoFilter = { from: "A1", to: "M1" };
 }

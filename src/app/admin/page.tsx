@@ -2,6 +2,11 @@ import Link from "next/link";
 
 const LINKS = [
   {
+    href: "/admin/dashboard",
+    title: "Tableau de bord",
+    desc: "CA du jour par mode de paiement, panier moyen, produits les plus vendus — en direct.",
+  },
+  {
     href: "/admin/evenements",
     title: "Événements & vendeurs",
     desc: "Créer un événement, l'activer, gérer la liste des vendeurs.",
