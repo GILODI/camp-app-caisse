@@ -206,13 +206,17 @@ create or replace function public.create_ticket(
   p_vendeur text,
   p_mode_paiement text,
   p_items jsonb,
-  p_remplace_ticket_id uuid default null
+  p_remplace_ticket_id uuid default null,
+  -- Permet à une correction admin de recréer le ticket sur sa date de vente
+  -- d'origine plutôt qu'aujourd'hui (voir admin_correct_ticket). Laissé à
+  -- null pour tout appel existant : comportement inchangé (date du jour).
+  p_vente_date date default null
 )
 returns table (id uuid, numero integer, vente_date date, total_ttc numeric)
 language plpgsql
 as $$
 declare
-  v_vente_date date := (now() at time zone 'Europe/Paris')::date;
+  v_vente_date date := coalesce(p_vente_date, (now() at time zone 'Europe/Paris')::date);
   v_numero integer;
   v_ticket_id uuid;
   v_total numeric(10,2);
@@ -292,6 +296,43 @@ begin
 
   return query
     select * from public.create_ticket(p_event_id, p_vendeur, p_mode_paiement, p_items, p_ticket_id);
+end;
+$$;
+
+-- Correction admin d'un ticket d'un jour passé (écran Admin > Corriger un
+-- ticket) : même principe que correct_ticket (annulation tracée + nouveau
+-- ticket lié, jamais d'édition en place), mais le nouveau ticket est recréé
+-- sur la date de vente D'ORIGINE (pas aujourd'hui), pour rester dans les
+-- bons totaux/export du jour concerné. event_id, vendeur et vente_date sont
+-- relus depuis le ticket original : l'appelant n'a besoin que de son id.
+create or replace function public.admin_correct_ticket(
+  p_ticket_id uuid,
+  p_mode_paiement text,
+  p_items jsonb,
+  p_by text,
+  p_motif text default 'Correction admin (ticket passé)'
+)
+returns table (id uuid, numero integer, vente_date date, total_ttc numeric)
+language plpgsql
+as $$
+declare
+  v_event_id uuid;
+  v_vendeur text;
+  v_vente_date date;
+begin
+  select t.event_id, t.vendeur, t.vente_date
+    into v_event_id, v_vendeur, v_vente_date
+    from public.tickets t
+    where t.id = p_ticket_id and t.statut = 'VALIDE';
+
+  if not found then
+    raise exception 'Ticket introuvable ou déjà annulé';
+  end if;
+
+  perform public.cancel_ticket(p_ticket_id, p_motif, p_by);
+
+  return query
+    select * from public.create_ticket(v_event_id, v_vendeur, p_mode_paiement, p_items, p_ticket_id, v_vente_date);
 end;
 $$;
 

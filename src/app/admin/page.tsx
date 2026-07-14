@@ -31,6 +31,11 @@ const LINKS = [
     title: "Mouvements de stock",
     desc: "Enregistrer une dotation, un vol ou une casse (sortie hors vente).",
   },
+  {
+    href: "/admin/tickets",
+    title: "Corriger un ticket passé",
+    desc: "Corriger un ticket d'un jour antérieur (mode de paiement, prix, quantités) avec trace conservée.",
+  },
 ];
 
 export default function AdminPage() {

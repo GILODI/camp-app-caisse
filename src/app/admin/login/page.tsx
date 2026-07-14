@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { PasswordInput } from "@/components/PasswordInput";
 
 function AdminLoginContent() {
   const router = useRouter();
@@ -36,14 +37,7 @@ function AdminLoginContent() {
       <h1 className="mb-1 text-xl font-bold">Espace Admin</h1>
       <p className="mb-6 text-sm text-black/60">Mot de passe requis pour gérer événements, vendeurs et catalogue.</p>
       <form onSubmit={handleSubmit} className="space-y-3">
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Mot de passe"
-          autoFocus
-          className="w-full rounded-lg border border-black/15 px-4 py-3"
-        />
+        <PasswordInput value={password} onChange={setPassword} placeholder="Mot de passe" autoFocus />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button
           type="submit"
