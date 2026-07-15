@@ -17,6 +17,11 @@ create table if not exists public.events (
   -- événement (voir EventCodeGate côté app) ; jamais exposé aux hooks
   -- publics, uniquement lu côté serveur ou depuis l'espace Admin protégé.
   code_acces text,
+  -- Événement de test (ex. "Event test") : seul cas où le bouton "Vider
+  -- les données" (reset_event_test_data) est autorisé. Faux par défaut —
+  -- un événement réel ne doit jamais pouvoir être vidé, ses transactions
+  -- doivent rester intégralement conservées (traçabilité comptable).
+  is_test boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -498,11 +503,26 @@ $$;
 -- (produits réutilisables) ni à facture_counters (séquence légale globale
 -- des numéros de facture, partagée entre tous les événements : ne doit
 -- jamais être réinitialisée, même pour un événement de test).
+-- Garde-fou au niveau base de données (pas seulement côté interface) :
+-- refuse tout événement dont is_test n'est pas explicitement vrai — un
+-- événement réel ne doit jamais pouvoir être vidé, même par erreur ou par
+-- un appel direct à l'API.
 create or replace function public.reset_event_test_data(p_event_id uuid)
 returns void
 language plpgsql
 as $$
+declare
+  v_is_test boolean;
 begin
+  select is_test into v_is_test from public.events where id = p_event_id;
+
+  if not found then
+    raise exception 'Événement introuvable';
+  end if;
+  if v_is_test is not true then
+    raise exception 'Cet événement n''est pas marqué comme événement de test — suppression refusée';
+  end if;
+
   delete from public.factures where event_id = p_event_id;
   delete from public.tickets where event_id = p_event_id;
   delete from public.mouvements_stock where event_id = p_event_id;

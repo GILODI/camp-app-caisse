@@ -37,6 +37,9 @@ export interface EventRow {
   // Présent uniquement quand récupéré via une requête admin (jamais exposé
   // aux écrans vendeur publics) — voir src/lib/hooks.ts useActiveEvent.
   code_acces?: string;
+  // Événement de test : seul cas où "Vider les données" est autorisé (voir
+  // reset_event_test_data). Faux par défaut pour tout événement réel.
+  is_test?: boolean;
 }
 
 export interface Vendeur {
