@@ -37,6 +37,9 @@ export interface EventRow {
   // Présent uniquement quand récupéré via une requête admin (jamais exposé
   // aux écrans vendeur publics) — voir src/lib/hooks.ts useActiveEvent.
   code_acces?: string;
+  // Événement de test : seul cas où "Vider les données" est autorisé (voir
+  // reset_event_test_data). Faux par défaut pour tout événement réel.
+  is_test?: boolean;
 }
 
 export interface Vendeur {
@@ -134,6 +137,20 @@ export interface NewFacturePayload {
   client_tva_intraco?: string;
   taux_tva?: number;
   by: string;
+}
+
+export type ClotureType = "jour" | "evenement";
+
+export interface Cloture {
+  id: string;
+  event_id: string;
+  type: ClotureType;
+  periode: string | null;
+  nb_tickets: number;
+  total_ttc: number;
+  hash: string;
+  closed_by: string | null;
+  closed_at: string;
 }
 
 // Ligne saisie côté client avant validation du ticket (pas encore d'id serveur).

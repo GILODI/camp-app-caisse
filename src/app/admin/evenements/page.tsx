@@ -97,6 +97,21 @@ export default function EvenementsPage() {
     }
   }
 
+  async function toggleTest(id: string, current: boolean) {
+    try {
+      const res = await fetch(`/api/events/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_test: !current }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error);
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   async function saveCode(id: string) {
     if (!codeValue.trim()) return;
     try {
@@ -217,13 +232,22 @@ export default function EvenementsPage() {
                 <>
                   <div className="min-w-0">
                     <p className="truncate font-medium">{ev.nom}</p>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {ev.is_active && <span className="text-xs font-semibold text-brand">Actif</span>}
                       {ev.code_acces && (
                         <span className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-xs tracking-widest">
                           {ev.code_acces}
                         </span>
                       )}
+                      <button
+                        onClick={() => toggleTest(ev.id, ev.is_test ?? false)}
+                        title="Marque cet événement comme événement de test — seul cas où « Vider les données » est possible"
+                        className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                          ev.is_test ? "bg-amber-100 text-amber-800" : "text-black/30 underline decoration-dotted"
+                        }`}
+                      >
+                        {ev.is_test ? "Test" : "Marquer comme test"}
+                      </button>
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -253,12 +277,14 @@ export default function EvenementsPage() {
                         Activer
                       </button>
                     )}
-                    <button
-                      onClick={() => setConfirmingResetId(ev.id)}
-                      className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600"
-                    >
-                      Vider les données
-                    </button>
+                    {ev.is_test && (
+                      <button
+                        onClick={() => setConfirmingResetId(ev.id)}
+                        className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600"
+                      >
+                        Vider les données
+                      </button>
+                    )}
                   </div>
                 </>
               )}

@@ -17,6 +17,11 @@ create table if not exists public.events (
   -- événement (voir EventCodeGate côté app) ; jamais exposé aux hooks
   -- publics, uniquement lu côté serveur ou depuis l'espace Admin protégé.
   code_acces text,
+  -- Événement de test (ex. "Event test") : seul cas où le bouton "Vider
+  -- les données" (reset_event_test_data) est autorisé. Faux par défaut —
+  -- un événement réel ne doit jamais pouvoir être vidé, ses transactions
+  -- doivent rester intégralement conservées (traçabilité comptable).
+  is_test boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -214,6 +219,39 @@ create table if not exists public.factures (
 create index if not exists factures_ticket_idx on public.factures (ticket_id);
 create index if not exists factures_event_idx on public.factures (event_id);
 
+-- ----------------------------------------------------------------------------
+-- clotures : verrouillage périodique (archivage ISCA). Une clôture "jour"
+-- fige et empreinte-numérote (hash) l'ensemble des tickets d'une date de
+-- vente ; une fois posée, plus aucune création/annulation de ticket n'est
+-- possible sur cette date (voir create_ticket / cancel_ticket). Une clôture
+-- "evenement" fige l'ensemble de l'événement, une fois tous ses jours de
+-- vente déjà clôturés individuellement — c'est l'équivalent, pour un usage
+-- événementiel ponctuel (2-3 fois par an), du couple mensuel/annuel prévu
+-- par la réglementation pour un usage de vente continue.
+-- ----------------------------------------------------------------------------
+create table if not exists public.clotures (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  type text not null check (type in ('jour', 'evenement')),
+  periode date, -- date clôturée pour type='jour' ; null pour type='evenement'
+  nb_tickets integer not null,
+  total_ttc numeric(10,2) not null,
+  -- Empreinte de contrôle (SHA-256) calculée sur l'ensemble des tickets de
+  -- la période (numéro, montant, statut) — toute modification a posteriori
+  -- des données sous-jacentes rendrait cette empreinte invérifiable.
+  hash text not null,
+  closed_by text,
+  closed_at timestamptz not null default now()
+);
+
+create unique index if not exists clotures_jour_idx
+  on public.clotures (event_id, periode)
+  where type = 'jour';
+
+create unique index if not exists clotures_evenement_idx
+  on public.clotures (event_id)
+  where type = 'evenement';
+
 -- ============================================================================
 -- Fonctions RPC — numérotation atomique + création/annulation/correction.
 -- Appelées côté serveur (route API Next.js) avec la clé service_role.
@@ -263,6 +301,13 @@ begin
     raise exception 'Un ticket doit contenir au moins une ligne';
   end if;
 
+  if exists (
+    select 1 from public.clotures
+    where event_id = p_event_id and type = 'jour' and periode = v_vente_date
+  ) then
+    raise exception 'Journée du % déjà clôturée : impossible d''ajouter ou de corriger un ticket sur cette date', v_vente_date;
+  end if;
+
   select coalesce(sum((elem->>'prix_unitaire')::numeric * (elem->>'quantite')::integer), 0)
     into v_total
     from jsonb_array_elements(p_items) as elem;
@@ -301,6 +346,15 @@ returns void
 language plpgsql
 as $$
 begin
+  if exists (
+    select 1 from public.tickets t
+    join public.clotures c
+      on c.event_id = t.event_id and c.type = 'jour' and c.periode = t.vente_date
+    where t.id = p_ticket_id
+  ) then
+    raise exception 'Journée déjà clôturée : impossible d''annuler ce ticket';
+  end if;
+
   update public.tickets
   set statut = 'ANNULE',
       motif_annulation = p_motif,
@@ -498,16 +552,125 @@ $$;
 -- (produits réutilisables) ni à facture_counters (séquence légale globale
 -- des numéros de facture, partagée entre tous les événements : ne doit
 -- jamais être réinitialisée, même pour un événement de test).
+-- Garde-fou au niveau base de données (pas seulement côté interface) :
+-- refuse tout événement dont is_test n'est pas explicitement vrai — un
+-- événement réel ne doit jamais pouvoir être vidé, même par erreur ou par
+-- un appel direct à l'API.
 create or replace function public.reset_event_test_data(p_event_id uuid)
 returns void
 language plpgsql
 as $$
+declare
+  v_is_test boolean;
 begin
+  select is_test into v_is_test from public.events where id = p_event_id;
+
+  if not found then
+    raise exception 'Événement introuvable';
+  end if;
+  if v_is_test is not true then
+    raise exception 'Cet événement n''est pas marqué comme événement de test — suppression refusée';
+  end if;
+
   delete from public.factures where event_id = p_event_id;
   delete from public.tickets where event_id = p_event_id;
   delete from public.mouvements_stock where event_id = p_event_id;
   delete from public.caisse_comptages where event_id = p_event_id;
   delete from public.ticket_counters where event_id = p_event_id;
+  delete from public.clotures where event_id = p_event_id;
+end;
+$$;
+
+-- Clôture d'une journée de vente : fige le nombre de tickets, le total TTC
+-- et une empreinte de contrôle (SHA-256) de tous les tickets de cette date
+-- (validés et annulés, pour un historique complet vérifiable). Une fois
+-- posée, plus aucun ticket ne peut être créé, corrigé ou annulé sur cette
+-- date (voir create_ticket / cancel_ticket).
+create or replace function public.close_day(p_event_id uuid, p_vente_date date, p_by text)
+returns public.clotures
+language plpgsql
+as $$
+declare
+  v_nb_tickets integer;
+  v_total numeric(10,2);
+  v_hash text;
+  v_row public.clotures;
+begin
+  select count(*), coalesce(sum(total_ttc) filter (where statut = 'VALIDE'), 0)
+    into v_nb_tickets, v_total
+    from public.tickets
+    where event_id = p_event_id and vente_date = p_vente_date;
+
+  if v_nb_tickets = 0 then
+    raise exception 'Aucun ticket pour le %, rien à clôturer', p_vente_date;
+  end if;
+
+  select encode(
+      digest(string_agg(numero || ':' || total_ttc || ':' || statut, ',' order by numero), 'sha256'),
+      'hex'
+    )
+    into v_hash
+    from public.tickets
+    where event_id = p_event_id and vente_date = p_vente_date;
+
+  insert into public.clotures (event_id, type, periode, nb_tickets, total_ttc, hash, closed_by)
+  values (p_event_id, 'jour', p_vente_date, v_nb_tickets, v_total, v_hash, p_by)
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+-- Clôture de l'événement entier : n'est possible qu'une fois tous les jours
+-- de vente ayant des tickets déjà clôturés individuellement (sinon des
+-- données resteraient modifiables sous couvert d'une clôture d'ensemble qui
+-- les laisserait croire figées). Fige le total et une empreinte de
+-- contrôle sur l'ensemble des tickets de l'événement.
+create or replace function public.close_event(p_event_id uuid, p_by text)
+returns public.clotures
+language plpgsql
+as $$
+declare
+  v_open_days integer;
+  v_nb_tickets integer;
+  v_total numeric(10,2);
+  v_hash text;
+  v_row public.clotures;
+begin
+  select count(distinct t.vente_date) into v_open_days
+    from public.tickets t
+    where t.event_id = p_event_id
+      and not exists (
+        select 1 from public.clotures c
+        where c.event_id = t.event_id and c.type = 'jour' and c.periode = t.vente_date
+      );
+
+  if v_open_days > 0 then
+    raise exception '% jour(s) de vente pas encore clôturé(s) — clôture-les d''abord', v_open_days;
+  end if;
+
+  select count(*), coalesce(sum(total_ttc) filter (where statut = 'VALIDE'), 0)
+    into v_nb_tickets, v_total
+    from public.tickets
+    where event_id = p_event_id;
+
+  if v_nb_tickets = 0 then
+    raise exception 'Aucun ticket pour cet événement, rien à clôturer';
+  end if;
+
+  select encode(
+      digest(string_agg(numero || ':' || total_ttc || ':' || statut, ',' order by vente_date, numero), 'sha256'),
+      'hex'
+    )
+    into v_hash
+    from public.tickets
+    where event_id = p_event_id;
+
+  insert into public.clotures (event_id, type, periode, nb_tickets, total_ttc, hash, closed_by)
+  values (p_event_id, 'evenement', null, v_nb_tickets, v_total, v_hash, p_by)
+  returning * into v_row;
+
+  return v_row;
 end;
 $$;
 
@@ -527,6 +690,7 @@ alter table public.caisse_comptages enable row level security;
 alter table public.mouvements_stock enable row level security;
 alter table public.factures enable row level security;
 alter table public.facture_counters enable row level security;
+alter table public.clotures enable row level security;
 -- factures / facture_counters : pas de policy de lecture publique — données
 -- client (nom, adresse, SIRET) accessibles uniquement via service_role
 -- (routes API serveur), jamais depuis le navigateur.
@@ -551,6 +715,9 @@ create policy "lecture publique caisse_comptages" on public.caisse_comptages for
 
 drop policy if exists "lecture publique mouvements_stock" on public.mouvements_stock;
 create policy "lecture publique mouvements_stock" on public.mouvements_stock for select using (true);
+
+drop policy if exists "lecture publique clotures" on public.clotures;
+create policy "lecture publique clotures" on public.clotures for select using (true);
 
 -- ticket_counters n'a pas besoin d'être lisible côté client : aucune policy.
 

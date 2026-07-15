@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
 
-  const update: { nom?: string; code_acces?: string } = {};
+  const update: { nom?: string; code_acces?: string; is_test?: boolean } = {};
   if (typeof body.nom === "string" && body.nom.trim()) update.nom = body.nom.trim();
   if (body.regenerate_code === true) {
     update.code_acces = generateAccessCode();
@@ -24,6 +24,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     update.code_acces = code;
   }
+  if (typeof body.is_test === "boolean") update.is_test = body.is_test;
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "Rien à mettre à jour" }, { status: 400 });
