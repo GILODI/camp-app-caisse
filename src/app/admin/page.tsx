@@ -41,6 +41,11 @@ const LINKS = [
     title: "Factures émises",
     desc: "Retrouver et retélécharger les factures déjà émises, par événement.",
   },
+  {
+    href: "/admin/clotures",
+    title: "Clôtures",
+    desc: "Figer définitivement les ventes d'un jour ou de l'événement (archivage, empreinte de contrôle).",
+  },
 ];
 
 export default function AdminPage() {

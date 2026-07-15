@@ -139,6 +139,20 @@ export interface NewFacturePayload {
   by: string;
 }
 
+export type ClotureType = "jour" | "evenement";
+
+export interface Cloture {
+  id: string;
+  event_id: string;
+  type: ClotureType;
+  periode: string | null;
+  nb_tickets: number;
+  total_ttc: number;
+  hash: string;
+  closed_by: string | null;
+  closed_at: string;
+}
+
 // Ligne saisie côté client avant validation du ticket (pas encore d'id serveur).
 export interface DraftLine {
   key: string;
