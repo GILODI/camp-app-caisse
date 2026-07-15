@@ -1,7 +1,7 @@
 import "server-only";
 import { Document, Page, Text, View, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
-import { VENDEUR_LEGAL, type Facture, type TicketItem } from "./types";
-import { formatDateFR } from "./date";
+import { VENDEUR_LEGAL, TAUX_TVA_DEFAUT, type TicketItem } from "./types";
+import { formatDateTimeFR } from "./date";
 
 const styles = StyleSheet.create({
   page: { padding: 36, fontSize: 9, fontFamily: "Helvetica", color: "#111" },
@@ -11,9 +11,7 @@ const styles = StyleSheet.create({
   small: { fontSize: 8, color: "#333", lineHeight: 1.4 },
   titleBlock: { alignItems: "flex-end" },
   title: { fontSize: 16, fontWeight: 700, marginBottom: 4 },
-  clientBlock: { marginBottom: 20, alignSelf: "flex-end", maxWidth: 260, textAlign: "left" },
-  clientLabel: { fontSize: 8, color: "#666", marginBottom: 2, textTransform: "uppercase" },
-  table: { marginTop: 10 },
+  table: { marginTop: 20 },
   tableHeaderRow: {
     flexDirection: "row",
     backgroundColor: "#f2f2f2",
@@ -30,8 +28,8 @@ const styles = StyleSheet.create({
   },
   colDesignation: { flex: 3 },
   colQte: { flex: 1, textAlign: "right" },
-  colPu: { flex: 1.2, textAlign: "right" },
   colTotal: { flex: 1.2, textAlign: "right" },
+  remiseLine: { fontSize: 7, color: "#666", marginTop: 1, paddingHorizontal: 4 },
   totalsBlock: { marginTop: 16, alignSelf: "flex-end", width: 220 },
   totalsRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
   totalsRowFinal: {
@@ -56,12 +54,7 @@ const styles = StyleSheet.create({
     borderTopColor: "#ccc",
     paddingTop: 6,
   },
-  paidBadge: {
-    marginTop: 18,
-    fontSize: 9,
-    fontWeight: 700,
-    color: "#166534",
-  },
+  merci: { marginTop: 18, fontSize: 9, fontWeight: 700, color: "#166534" },
 });
 
 const MODE_LABELS: Record<string, string> = {
@@ -71,10 +64,9 @@ const MODE_LABELS: Record<string, string> = {
   CHEQUE: "Chèque",
 };
 
-export interface FacturePdfData {
-  facture: Facture;
-  ticketNumero: number;
-  venteDate: string;
+export interface TicketPdfData {
+  numero: number;
+  createdAt: string;
   modePaiement: string;
   items: TicketItem[];
   eventNom: string;
@@ -84,7 +76,11 @@ function money(n: number): string {
   return `${n.toFixed(2)} €`;
 }
 
-function FactureDocument({ facture, ticketNumero, venteDate, modePaiement, items, eventNom }: FacturePdfData) {
+function TicketDocument({ numero, createdAt, modePaiement, items, eventNom }: TicketPdfData) {
+  const totalTtc = items.reduce((sum, item) => sum + Number(item.total_ligne), 0);
+  const totalHt = Math.round((totalTtc / (1 + TAUX_TVA_DEFAUT / 100)) * 100) / 100;
+  const montantTva = Math.round((totalTtc - totalHt) * 100) / 100;
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -93,65 +89,62 @@ function FactureDocument({ facture, ticketNumero, venteDate, modePaiement, items
             <Text style={styles.vendeurNom}>{VENDEUR_LEGAL.raisonSociale}</Text>
             <Text style={styles.small}>{VENDEUR_LEGAL.adresse}</Text>
             <Text style={styles.small}>{VENDEUR_LEGAL.codePostalVille}</Text>
-            <Text style={styles.small}>SIRET : {VENDEUR_LEGAL.siret}</Text>
-            <Text style={styles.small}>{VENDEUR_LEGAL.rcs}</Text>
-            <Text style={styles.small}>N° TVA intracom. : {VENDEUR_LEGAL.tvaIntraco}</Text>
             <Text style={styles.small}>Tél. {VENDEUR_LEGAL.tel}</Text>
             <Text style={styles.small}>{VENDEUR_LEGAL.email}</Text>
           </View>
           <View style={styles.titleBlock}>
-            <Text style={styles.title}>FACTURE</Text>
-            <Text style={styles.small}>N° {facture.numero_affiche}</Text>
-            <Text style={styles.small}>Date d&apos;émission : {formatDateFR(facture.created_at.slice(0, 10))}</Text>
-            <Text style={styles.small}>Vente du {formatDateFR(venteDate)} — ticket n° {ticketNumero}</Text>
+            <Text style={styles.title}>TICKET DE CAISSE</Text>
+            <Text style={styles.small}>N° {numero}</Text>
+            <Text style={styles.small}>{formatDateTimeFR(createdAt)}</Text>
             <Text style={styles.small}>{eventNom}</Text>
           </View>
-        </View>
-
-        <View style={styles.clientBlock}>
-          <Text style={styles.clientLabel}>Facturé à</Text>
-          <Text style={styles.small}>{facture.client_nom}</Text>
-          <Text style={styles.small}>{facture.client_adresse}</Text>
-          {facture.client_siret && <Text style={styles.small}>SIRET : {facture.client_siret}</Text>}
-          {facture.client_tva_intraco && (
-            <Text style={styles.small}>N° TVA intracom. : {facture.client_tva_intraco}</Text>
-          )}
         </View>
 
         <View style={styles.table}>
           <View style={styles.tableHeaderRow}>
             <Text style={styles.colDesignation}>Désignation</Text>
             <Text style={styles.colQte}>Qté</Text>
-            <Text style={styles.colPu}>PU TTC</Text>
             <Text style={styles.colTotal}>Total TTC</Text>
           </View>
-          {items.map((item) => (
-            <View style={styles.tableRow} key={item.id}>
-              <Text style={styles.colDesignation}>{item.designation}</Text>
-              <Text style={styles.colQte}>{item.quantite}</Text>
-              <Text style={styles.colPu}>{money(Number(item.prix_unitaire))}</Text>
-              <Text style={styles.colTotal}>{money(Number(item.total_ligne))}</Text>
-            </View>
-          ))}
+          {items.map((item) => {
+            const pvp = item.pvp_ttc === null || item.pvp_ttc === undefined ? null : Number(item.pvp_ttc);
+            const remise = pvp !== null && Math.abs(pvp - Number(item.prix_unitaire)) > 0.001;
+            const pvcTotal = pvp !== null ? pvp * item.quantite : 0;
+            const remisePct = remise ? Math.round((1 - Number(item.prix_unitaire) / pvp!) * 100) : 0;
+            return (
+              <View key={item.id}>
+                <View style={styles.tableRow}>
+                  <Text style={styles.colDesignation}>{item.designation}</Text>
+                  <Text style={styles.colQte}>{item.quantite}</Text>
+                  <Text style={styles.colTotal}>{money(Number(item.total_ligne))}</Text>
+                </View>
+                {remise && (
+                  <Text style={styles.remiseLine}>
+                    PVC {money(pvcTotal)}, Remise {remisePct}%
+                  </Text>
+                )}
+              </View>
+            );
+          })}
         </View>
 
         <View style={styles.totalsBlock}>
           <View style={styles.totalsRow}>
             <Text>Total HT</Text>
-            <Text>{money(Number(facture.total_ht))}</Text>
+            <Text>{money(totalHt)}</Text>
           </View>
           <View style={styles.totalsRow}>
-            <Text>TVA ({Number(facture.taux_tva).toFixed(2)} %)</Text>
-            <Text>{money(Number(facture.montant_tva))}</Text>
+            <Text>TVA ({TAUX_TVA_DEFAUT} %)</Text>
+            <Text>{money(montantTva)}</Text>
           </View>
           <View style={styles.totalsRowFinal}>
             <Text>Total TTC</Text>
-            <Text>{money(Number(facture.total_ttc))}</Text>
+            <Text>{money(totalTtc)}</Text>
           </View>
         </View>
 
-        <Text style={styles.paidBadge}>
-          Facture acquittée le {formatDateFR(venteDate)} — réglée par {MODE_LABELS[modePaiement] ?? modePaiement}.
+        <Text style={styles.merci}>
+          Réglé par {MODE_LABELS[modePaiement] ?? modePaiement} — Merci de votre achat !
         </Text>
 
         <View style={styles.footer} fixed>
@@ -159,17 +152,12 @@ function FactureDocument({ facture, ticketNumero, venteDate, modePaiement, items
             {VENDEUR_LEGAL.raisonSociale} — {VENDEUR_LEGAL.adresse}, {VENDEUR_LEGAL.codePostalVille} — SIRET{" "}
             {VENDEUR_LEGAL.siret} — {VENDEUR_LEGAL.rcs} — TVA intracom. {VENDEUR_LEGAL.tvaIntraco}
           </Text>
-          <Text>
-            Vente au comptant, aucun escompte pour paiement anticipé. En cas de retard de paiement (créance
-            professionnelle) : pénalités au taux directeur BCE majoré de 10 points, indemnité forfaitaire de
-            recouvrement de 40 €.
-          </Text>
         </View>
       </Page>
     </Document>
   );
 }
 
-export async function renderFacturePdf(data: FacturePdfData): Promise<Buffer> {
-  return renderToBuffer(<FactureDocument {...data} />);
+export async function renderTicketPdf(data: TicketPdfData): Promise<Buffer> {
+  return renderToBuffer(<TicketDocument {...data} />);
 }

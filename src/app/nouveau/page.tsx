@@ -16,7 +16,6 @@ import { EventCodeGate } from "@/components/EventCodeGate";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { CashChangeCalculator } from "@/components/CashChangeCalculator";
 import { FactureDialog } from "@/components/FactureDialog";
-import { buildReceiptText } from "@/lib/receipt";
 import type { CatalogueItem, DraftLine, EventRow, Facture, PaymentMethod, TicketWithItems } from "@/lib/types";
 
 function NouveauTicketContent() {
@@ -183,30 +182,24 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
   }
 
   async function handleSendReceipt() {
-    if (!result || !mode) return;
-    const text = buildReceiptText({
-      eventNom: event.nom,
-      numero: result.numero,
-      lines,
-      mode,
-      total: Number(result.total_ttc),
-    });
-
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: `Reçu — ticket n° ${result.numero}`, text });
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") toast.error("Impossible de partager le reçu.");
-      }
-      return;
-    }
-
+    if (!result) return;
     try {
-      await navigator.clipboard.writeText(text);
-      toast.success("Reçu copié — colle-le dans un SMS, WhatsApp ou un e-mail.");
-    } catch {
-      toast.error("Impossible de copier le reçu.");
+      const res = await fetch(`/api/tickets/${result.id}/pdf`);
+      if (!res.ok) throw new Error("Impossible de récupérer le ticket");
+      const blob = await res.blob();
+      const file = new File([blob], `Ticket-${result.numero}.pdf`, { type: "application/pdf" });
+
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Ticket n° ${result.numero}` });
+        return;
+      }
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      // Partage impossible (navigateur trop ancien, erreur réseau...) : on
+      // retombe sur l'ouverture du PDF, que le vendeur peut alors partager
+      // manuellement depuis le lecteur PDF du téléphone.
     }
+    window.open(`/api/tickets/${result.id}/pdf`, "_blank");
   }
 
   async function handleSendFacture() {
