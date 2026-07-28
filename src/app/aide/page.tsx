@@ -35,7 +35,16 @@ export default function AidePage() {
             de l&apos;événement (donné par le responsable) — à faire une seule fois par téléphone.
           </li>
           <li>Onglet « Nouveau » → rechercher un produit par référence ou nom.</li>
+          <li>
+            Ou toucher le bouton <strong>📷</strong>{" "}
+            (à droite de la recherche) et viser le code-barres de l&apos;étiquette : le produit s&apos;ajoute
+            tout seul.
+          </li>
           <li>Toucher le produit pour l&apos;ajouter, ajuster la quantité avec + / −.</li>
+          <li>
+            Besoin d&apos;une remise ? Toucher le prix de la ligne pour le modifier. Le prix d&apos;origine reste
+            enregistré, la remise apparaît dans l&apos;export.
+          </li>
           <li>Le total se met à jour automatiquement à chaque ligne.</li>
         </ol>
       </Section>
@@ -43,6 +52,10 @@ export default function AidePage() {
       <Section title="3. Encaisser">
         <ol className="list-decimal space-y-1 pl-5">
           <li>Choisir le mode de paiement : CB, CB sans contact, Espèces ou Chèque.</li>
+          <li>
+            En espèces : la <strong>calculette de rendu-monnaie</strong>{" "}
+            s&apos;affiche — saisir la somme donnée par le client, l&apos;app calcule la monnaie à rendre.
+          </li>
           <li>Toucher « Valider le ticket ».</li>
           <li>
             Le <strong>numéro de ticket</strong> et le <strong>montant</strong>{" "}
@@ -51,7 +64,26 @@ export default function AidePage() {
         </ol>
       </Section>
 
-      <Section title="4. Corriger une erreur">
+      <Section title="4. Reçu et demande de facture">
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <strong>📤 Envoyer le reçu au client</strong> : envoie le ticket de caisse en PDF (SMS, WhatsApp,
+            mail…) depuis le téléphone.
+          </li>
+          <li>
+            <strong>🧾 Le client demande une facture</strong>{" "}
+            : noter nom, prénom, adresse, téléphone et email
+            (SIRET si c&apos;est un professionnel). La facture n&apos;est pas éditée sur place — elle sera
+            établie ensuite par le service comptable à partir de ces informations.
+          </li>
+          <li>
+            Oublié sur le moment ? Les deux boutons sont aussi disponibles sur chaque ticket dans{" "}
+            <strong>« Ventes du jour »</strong>, tant que la journée n&apos;est pas clôturée.
+          </li>
+        </ul>
+      </Section>
+
+      <Section title="5. Corriger une erreur">
         <ol className="list-decimal space-y-1 pl-5">
           <li>Onglet « Ventes du jour » → repérer le ticket concerné.</li>
           <li>
@@ -60,16 +92,42 @@ export default function AidePage() {
           <li>
             <strong>Corriger</strong>{" "}
             : pour une erreur de quantité ou de produit. L&apos;ancien ticket est annulé automatiquement et un
-            nouveau ticket (avec un nouveau numéro) est créé avec les bonnes lignes.
+            nouveau ticket (avec un nouveau numéro) est créé avec les bonnes lignes. Si une facture avait été
+            demandée, elle suit automatiquement le nouveau ticket.
           </li>
         </ol>
       </Section>
 
-      <Section title="5. Exporter en fin de journée">
+      <Section title="6. Exporter en fin de journée">
         <ol className="list-decimal space-y-1 pl-5">
           <li>Onglet « Ventes du jour » → bouton « Exporter » (ou Admin → Export fin de journée).</li>
           <li>Le fichier Excel se télécharge automatiquement (Caisse_[Événement]_[Date].xlsx).</li>
-          <li>Il contient les totaux par mode de paiement, les statistiques et le détail de chaque ticket.</li>
+          <li>
+            Il contient les totaux par mode de paiement, les statistiques, le détail de chaque ticket et, s&apos;il
+            y en a eu, une feuille « Demandes de facture ».
+          </li>
+          <li>
+            Les ventes avec demande de facture sont <strong>sorties du total à traiter en bloc</strong>{" "}
+            (elles seront saisies une par une en comptabilité) — un total de contrôle rassemble malgré tout
+            l&apos;ensemble.
+          </li>
+        </ol>
+      </Section>
+
+      <Section title="7. Après l'événement (responsable)">
+        <ol className="list-decimal space-y-1 pl-5">
+          <li>
+            Admin → <strong>Clôtures</strong>{" "}
+            : clôturer chaque journée de vente, puis l&apos;événement.
+          </li>
+          <li>
+            Une journée clôturée est définitivement figée : plus aucun ticket ne peut y être ajouté, corrigé ou
+            annulé. C&apos;est ce qui garantit la conformité fiscale de la caisse.
+          </li>
+          <li>
+            Admin → <strong>Export fin de journée</strong> → « Archive complète » : un seul fichier Excel avec
+            toutes les ventes, le stock, la caisse espèces et les demandes de facture.
+          </li>
         </ol>
       </Section>
 

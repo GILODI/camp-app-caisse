@@ -341,6 +341,7 @@ function buildDemandesFactureSheet(
   sheet.columns = [
     { header: "Date", key: "date", width: 12, style: centered },
     { header: "N° ticket", key: "numero", width: 12, style: centered },
+    { header: "Statut ticket", key: "statut", width: 24, style: centered },
     { header: "Nom", key: "nom", width: 16 },
     { header: "Prénom", key: "prenom", width: 16 },
     { header: "Adresse", key: "adresse", width: 30 },
@@ -356,13 +357,29 @@ function buildDemandesFactureSheet(
   ];
   styleHeaderRow(sheet.getRow(1));
 
+  // Ordre de traitement naturel pour celui qui ressaisit les factures :
+  // chronologique, puis par numéro de ticket.
+  const sorted = [...demandes].sort((a, b) => {
+    const ta = ticketsById.get(a.ticket_id);
+    const tb = ticketsById.get(b.ticket_id);
+    if (!ta || !tb) return ta ? -1 : tb ? 1 : 0;
+    if (ta.vente_date !== tb.vente_date) return ta.vente_date < tb.vente_date ? -1 : 1;
+    return ta.numero - tb.numero;
+  });
+
   let shade = false;
-  for (const demande of demandes) {
+  for (const demande of sorted) {
     const ticket = ticketsById.get(demande.ticket_id);
+    // Un ticket corrigé est annulé puis recréé sous un nouveau numéro : la
+    // demande d'origine reste rattachée au ticket annulé, et une copie suit
+    // le nouveau ticket. On garde la ligne (jamais de suppression) mais on
+    // la signale clairement pour ne surtout pas facturer une vente annulée.
+    const annule = ticket?.statut === "ANNULE";
     shade = !shade;
     const baseData = {
       date: ticket ? formatDateFR(ticket.vente_date) : "",
       numero: ticket?.numero ?? "",
+      statut: annule ? "ANNULÉ — NE PAS FACTURER" : "Validé",
       nom: demande.client_nom,
       prenom: demande.client_prenom,
       adresse: demande.client_adresse,
@@ -372,12 +389,21 @@ function buildDemandesFactureSheet(
       modePaiement: ticket ? labelByMethod.get(ticket.mode_paiement) ?? ticket.mode_paiement : "",
     };
 
-    if (!ticket || ticket.ticket_items.length === 0) {
-      const row = sheet.addRow(baseData);
+    const styleRow = (row: ExcelJS.Row) => {
       row.eachCell((cell) => {
         cell.border = THIN_BORDER;
         if (shade) cell.fill = BAND_FILL;
+        if (annule) cell.font = { color: { argb: "FF999999" }, italic: true, strike: true };
       });
+      if (annule) {
+        const statutCell = row.getCell("statut");
+        statutCell.font = { color: { argb: "FFCC0000" }, bold: true };
+        statutCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFD6D6" } };
+      }
+    };
+
+    if (!ticket || ticket.ticket_items.length === 0) {
+      styleRow(sheet.addRow(baseData));
       continue;
     }
 
@@ -392,14 +418,11 @@ function buildDemandesFactureSheet(
       });
       row.getCell("pu").numFmt = CURRENCY_FMT;
       row.getCell("totalLigne").numFmt = CURRENCY_FMT;
-      row.eachCell((cell) => {
-        cell.border = THIN_BORDER;
-        if (shade) cell.fill = BAND_FILL;
-      });
+      styleRow(row);
     }
   }
 
-  sheet.autoFilter = { from: "A1", to: "N1" };
+  sheet.autoFilter = { from: "A1", to: "O1" };
 }
 
 export async function generateCaisseExport(

@@ -8,6 +8,7 @@ import { useActiveEvent, useCatalogue, useStock } from "@/lib/hooks";
 import { STOCK_LOW_THRESHOLD } from "@/lib/stock";
 import { getStoredVendeur } from "@/lib/currentVendeur";
 import { getTicketQueue, type TicketResult } from "@/lib/offlineQueue";
+import { shareTicketPdf } from "@/lib/shareTicket";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductAutocomplete } from "@/components/ProductAutocomplete";
 import { TicketLinesEditor } from "@/components/TicketLinesEditor";
@@ -183,23 +184,7 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
 
   async function handleSendReceipt() {
     if (!result) return;
-    try {
-      const res = await fetch(`/api/tickets/${result.id}/pdf`);
-      if (!res.ok) throw new Error("Impossible de récupérer le ticket");
-      const blob = await res.blob();
-      const file = new File([blob], `Ticket-${result.numero}.pdf`, { type: "application/pdf" });
-
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: `Ticket n° ${result.numero}` });
-        return;
-      }
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      // Partage impossible (navigateur trop ancien, erreur réseau...) : on
-      // retombe sur l'ouverture du PDF, que le vendeur peut alors partager
-      // manuellement depuis le lecteur PDF du téléphone.
-    }
-    window.open(`/api/tickets/${result.id}/pdf`, "_blank");
+    await shareTicketPdf(result.id, result.numero);
   }
 
   function resetForm() {

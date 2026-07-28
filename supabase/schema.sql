@@ -243,7 +243,11 @@ create table if not exists public.demandes_facture (
   created_at timestamptz not null default now()
 );
 
-create index if not exists demandes_facture_ticket_idx on public.demandes_facture (ticket_id);
+-- Une seule demande de facture par ticket : évite qu'un double-clic ou une
+-- ressaisie crée deux lignes dans l'export, donc deux factures pour la même
+-- vente. En cas de correction de ticket, la demande est recopiée sur le
+-- nouveau ticket (id différent), ce qui reste compatible avec l'unicité.
+create unique index if not exists demandes_facture_ticket_idx on public.demandes_facture (ticket_id);
 create index if not exists demandes_facture_event_idx on public.demandes_facture (event_id);
 
 -- ----------------------------------------------------------------------------
