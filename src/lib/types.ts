@@ -123,6 +123,7 @@ export interface DemandeFacture {
   client_prenom: string;
   client_adresse: string;
   client_telephone: string;
+  client_email: string;
   client_siret: string | null;
   created_by: string | null;
   created_at: string;
@@ -133,6 +134,7 @@ export interface NewDemandeFacturePayload {
   client_prenom: string;
   client_adresse: string;
   client_telephone: string;
+  client_email: string;
   client_siret?: string;
   by: string;
 }

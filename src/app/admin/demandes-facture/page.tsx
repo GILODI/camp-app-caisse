@@ -107,7 +107,7 @@ export default function AdminDemandesFacturePage() {
                       {d.client_prenom} {d.client_nom}
                     </p>
                     <p className="text-xs text-black/50">
-                      {d.client_adresse} · {d.client_telephone}
+                      {d.client_adresse} · {d.client_telephone} · {d.client_email}
                       {d.client_siret && <> · SIRET {d.client_siret}</>}
                     </p>
                     <p className="mt-1 text-xs text-black/50">

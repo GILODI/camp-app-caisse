@@ -21,11 +21,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const client_prenom = (payload.client_prenom ?? "").trim();
   const client_adresse = (payload.client_adresse ?? "").trim();
   const client_telephone = (payload.client_telephone ?? "").trim();
+  const client_email = (payload.client_email ?? "").trim();
   const client_siret = (payload.client_siret ?? "").trim();
   const by = (payload.by ?? "").trim() || "Inconnu";
 
-  if (!client_nom || !client_prenom || !client_adresse || !client_telephone) {
-    return NextResponse.json({ error: "Nom, prénom, adresse et téléphone requis" }, { status: 400 });
+  if (!client_nom || !client_prenom || !client_adresse || !client_telephone || !client_email) {
+    return NextResponse.json({ error: "Nom, prénom, adresse, téléphone et email requis" }, { status: 400 });
   }
 
   const { data: ticket, error: ticketError } = await supabaseServer
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       client_prenom,
       client_adresse,
       client_telephone,
+      client_email,
       client_siret: client_siret || null,
       created_by: by,
     })

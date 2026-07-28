@@ -345,6 +345,7 @@ function buildDemandesFactureSheet(
     { header: "Prénom", key: "prenom", width: 16 },
     { header: "Adresse", key: "adresse", width: 30 },
     { header: "Téléphone", key: "telephone", width: 16 },
+    { header: "Email", key: "email", width: 24 },
     { header: "SIRET", key: "siret", width: 16 },
     { header: "Mode de paiement", key: "modePaiement", width: 18 },
     { header: "Référence", key: "reference", width: 16 },
@@ -366,6 +367,7 @@ function buildDemandesFactureSheet(
       prenom: demande.client_prenom,
       adresse: demande.client_adresse,
       telephone: demande.client_telephone,
+      email: demande.client_email,
       siret: demande.client_siret ?? "",
       modePaiement: ticket ? labelByMethod.get(ticket.mode_paiement) ?? ticket.mode_paiement : "",
     };
@@ -397,7 +399,7 @@ function buildDemandesFactureSheet(
     }
   }
 
-  sheet.autoFilter = { from: "A1", to: "M1" };
+  sheet.autoFilter = { from: "A1", to: "N1" };
 }
 
 export async function generateCaisseExport(

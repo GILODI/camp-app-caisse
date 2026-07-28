@@ -237,6 +237,7 @@ create table if not exists public.demandes_facture (
   client_prenom text not null,
   client_adresse text not null,
   client_telephone text not null,
+  client_email text not null default '',
   client_siret text,
   created_by text,
   created_at timestamptz not null default now()
