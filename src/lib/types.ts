@@ -127,6 +127,9 @@ export interface DemandeFacture {
   client_siret: string | null;
   created_by: string | null;
   created_at: string;
+  // Coordonnées effacées une fois la facture émise dans l'ERP (RGPD).
+  // Null = coordonnées encore présentes.
+  anonymise_at: string | null;
 }
 
 export interface NewDemandeFacturePayload {

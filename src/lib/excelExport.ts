@@ -380,12 +380,14 @@ function buildDemandesFactureSheet(
       date: ticket ? formatDateFR(ticket.vente_date) : "",
       numero: ticket?.numero ?? "",
       statut: annule ? "ANNULÉ — NE PAS FACTURER" : "Validé",
-      nom: demande.client_nom,
-      prenom: demande.client_prenom,
-      adresse: demande.client_adresse,
-      telephone: demande.client_telephone,
-      email: demande.client_email,
-      siret: demande.client_siret ?? "",
+      // Coordonnées effacées après émission de la facture (RGPD) : la ligne
+      // reste, avec le détail des produits, mais le client a disparu.
+      nom: demande.anonymise_at ? "(coordonnées effacées)" : demande.client_nom,
+      prenom: demande.anonymise_at ? "" : demande.client_prenom,
+      adresse: demande.anonymise_at ? "" : demande.client_adresse,
+      telephone: demande.anonymise_at ? "" : demande.client_telephone,
+      email: demande.anonymise_at ? "" : demande.client_email,
+      siret: demande.anonymise_at ? "" : demande.client_siret ?? "",
       modePaiement: ticket ? labelByMethod.get(ticket.mode_paiement) ?? ticket.mode_paiement : "",
     };
 

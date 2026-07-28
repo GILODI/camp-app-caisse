@@ -72,6 +72,10 @@ export function DemandeFactureDialog({
           Le ticket reste enregistré tel quel. La facture sera établie plus tard à partir de ces coordonnées —
           l&apos;appli ne la génère pas ici.
         </p>
+        <p className="rounded-lg bg-black/5 p-2 text-xs text-black/50">
+          Ces informations servent uniquement à établir la facture. Elles sont effacées de l&apos;application une
+          fois celle-ci envoyée.
+        </p>
 
         <label className="block text-sm font-medium">
           Nom *
