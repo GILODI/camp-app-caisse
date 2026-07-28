@@ -37,9 +37,9 @@ const LINKS = [
     desc: "Enregistrer une dotation, un vol ou une casse (sortie hors vente).",
   },
   {
-    href: "/admin/factures",
-    title: "Factures émises",
-    desc: "Retrouver et retélécharger les factures déjà émises, par événement.",
+    href: "/admin/demandes-facture",
+    title: "Demandes de facture",
+    desc: "Coordonnées client à ressaisir dans le système comptable, par événement.",
   },
   {
     href: "/admin/clotures",

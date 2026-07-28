@@ -111,31 +111,29 @@ export const VENDEUR_LEGAL = {
 // hauteur : taux standard, pas de taux réduit applicable).
 export const TAUX_TVA_DEFAUT = 20;
 
-export interface Facture {
+// Le client souhaite une facture, établie plus tard dans le système
+// comptable de l'entreprise (décision de l'expert-comptable) — l'appli se
+// limite à capter la demande et les coordonnées, jamais à générer la
+// facture elle-même.
+export interface DemandeFacture {
   id: string;
   ticket_id: string;
   event_id: string;
-  annee: number;
-  numero_seq: number;
-  numero_affiche: string;
   client_nom: string;
+  client_prenom: string;
   client_adresse: string;
+  client_telephone: string;
   client_siret: string | null;
-  client_tva_intraco: string | null;
-  taux_tva: number;
-  total_ht: number;
-  montant_tva: number;
-  total_ttc: number;
   created_by: string | null;
   created_at: string;
 }
 
-export interface NewFacturePayload {
+export interface NewDemandeFacturePayload {
   client_nom: string;
+  client_prenom: string;
   client_adresse: string;
+  client_telephone: string;
   client_siret?: string;
-  client_tva_intraco?: string;
-  taux_tva?: number;
   by: string;
 }
 

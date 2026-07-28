@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import type { CaisseComptage, MouvementStock, PaymentMethod, TicketWithItems } from "./types";
+import type { CaisseComptage, DemandeFacture, MouvementStock, PaymentMethod, TicketWithItems } from "./types";
 import { DENOMINATIONS, MOUVEMENT_TYPES, PAYMENT_METHODS } from "./types";
 import type { CaisseRow } from "./caisseCalc";
 import { STOCK_LOW_THRESHOLD, type StockLine } from "./stock";
@@ -79,50 +79,39 @@ function styleTotalRow(row: ExcelJS.Row) {
 export async function generateDailyExport(
   eventNom: string,
   venteDate: string,
-  tickets: TicketWithItems[]
+  tickets: TicketWithItems[],
+  demandes: DemandeFacture[] = []
 ): Promise<ExcelJS.Buffer> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Caisse événementielle C.A.M.P. France";
   workbook.created = new Date();
 
   const valides = tickets.filter((t) => t.statut === "VALIDE");
+  const demandeTicketIds = new Set(demandes.map((d) => d.ticket_id));
 
-  buildSyntheseSheet(workbook, eventNom, venteDate, valides);
-  buildDetailSheet(workbook, tickets);
+  buildSyntheseSheet(workbook, eventNom, venteDate, valides, demandeTicketIds);
+  buildDetailSheet(workbook, tickets, demandeTicketIds);
+  if (demandes.length > 0) {
+    const ticketsById = new Map(tickets.map((t) => [t.id, t]));
+    buildDemandesFactureSheet(workbook, demandes, ticketsById);
+  }
 
   return workbook.xlsx.writeBuffer();
 }
 
-function buildSyntheseSheet(
-  workbook: ExcelJS.Workbook,
-  eventNom: string,
-  venteDate: string,
-  valides: TicketWithItems[]
-) {
-  const sheet = workbook.addWorksheet("Synthèse jour");
-  sheet.columns = [{ width: 22 }, { width: 16 }, { width: 16 }, { width: 18 }];
-
-  sheet.mergeCells("A1:D1");
-  const titleCell = sheet.getCell("A1");
-  titleCell.value = `${eventNom} — ${formatDateFR(venteDate)}`;
-  titleCell.font = { bold: true, size: 14 };
-  sheet.getRow(1).height = 24;
-
-  // ---- Tableau 1 : totaux par mode de paiement ----
-  sheet.getCell("A3").value = "Totaux par mode de paiement";
-  sheet.getCell("A3").font = { bold: true, size: 12 };
-
-  const t1Header = sheet.addRow(["Mode de paiement", "Nb tickets", "Nb articles", "Total TTC"]);
-  styleHeaderRow(t1Header);
-
+// Totaux par mode de paiement, en excluant les tickets avec demande de
+// facture (traités individuellement dans le système comptable, jamais dans
+// le bloc du soir — sinon double comptage). Retourne aussi les totaux par
+// mode pour les seules demandes de facture, pour la deuxième table.
+function computeByMethod(tickets: TicketWithItems[], excludeIds: Set<string>) {
+  const byMethod = new Map<PaymentMethod, { nbTickets: number; nbArticles: number; total: number }>();
+  for (const { value } of PAYMENT_METHODS) byMethod.set(value, { nbTickets: 0, nbArticles: 0, total: 0 });
   let totalTickets = 0;
   let totalArticles = 0;
   let totalCA = 0;
 
-  const byMethod = new Map<PaymentMethod, { nbTickets: number; nbArticles: number; total: number }>();
-  for (const { value } of PAYMENT_METHODS) byMethod.set(value, { nbTickets: 0, nbArticles: 0, total: 0 });
-
-  for (const ticket of valides) {
+  for (const ticket of tickets) {
+    if (excludeIds.has(ticket.id)) continue;
     const stats = byMethod.get(ticket.mode_paiement)!;
     stats.nbTickets += 1;
     stats.total += Number(ticket.total_ttc);
@@ -134,21 +123,91 @@ function buildSyntheseSheet(
     totalCA += Number(ticket.total_ttc);
   }
 
+  return { byMethod, totalTickets, totalArticles, totalCA };
+}
+
+function writeByMethodTable(sheet: ExcelJS.Worksheet, byMethod: Map<PaymentMethod, { nbTickets: number; nbArticles: number; total: number }>) {
   for (const { value, label } of PAYMENT_METHODS) {
     const stats = byMethod.get(value)!;
     const row = sheet.addRow([label, stats.nbTickets, stats.nbArticles, stats.total]);
     row.getCell(4).numFmt = CURRENCY_FMT;
     row.eachCell((cell) => (cell.border = THIN_BORDER));
   }
+}
 
-  const totalRow = sheet.addRow(["TOTAL GÉNÉRAL", totalTickets, totalArticles, totalCA]);
+function buildSyntheseSheet(
+  workbook: ExcelJS.Workbook,
+  eventNom: string,
+  venteDate: string,
+  valides: TicketWithItems[],
+  demandeTicketIds: Set<string>
+) {
+  const sheet = workbook.addWorksheet("Synthèse jour");
+  sheet.columns = [{ width: 22 }, { width: 16 }, { width: 16 }, { width: 18 }];
+
+  sheet.mergeCells("A1:D1");
+  const titleCell = sheet.getCell("A1");
+  titleCell.value = `${eventNom} — ${formatDateFR(venteDate)}`;
+  titleCell.font = { bold: true, size: 14 };
+  sheet.getRow(1).height = 24;
+
+  // ---- Tableau 1 : totaux par mode de paiement, à traiter en bloc ----
+  // (exclut les ventes avec demande de facture, saisies individuellement
+  // dans le système comptable — sinon elles seraient comptées deux fois).
+  sheet.getCell("A3").value = "Totaux par mode de paiement — à traiter en bloc";
+  sheet.getCell("A3").font = { bold: true, size: 12 };
+
+  const t1Header = sheet.addRow(["Mode de paiement", "Nb tickets", "Nb articles", "Total TTC"]);
+  styleHeaderRow(t1Header);
+
+  const bloc = computeByMethod(valides, demandeTicketIds);
+  writeByMethodTable(sheet, bloc.byMethod);
+
+  const totalRow = sheet.addRow(["TOTAL (hors demandes de facture)", bloc.totalTickets, bloc.totalArticles, bloc.totalCA]);
   totalRow.getCell(4).numFmt = CURRENCY_FMT;
   styleTotalRow(totalRow);
 
-  // ---- Tableau 2 : statistiques rapides ----
-  const t2TitleRowIdx = sheet.lastRow!.number + 2;
-  sheet.getCell(`A${t2TitleRowIdx}`).value = "Statistiques rapides";
-  sheet.getCell(`A${t2TitleRowIdx}`).font = { bold: true, size: 12 };
+  // ---- Tableau 2 : dont demandes de facture, à saisir individuellement ----
+  const facture = computeByMethod(
+    valides.filter((t) => demandeTicketIds.has(t.id)),
+    new Set()
+  );
+  let totalCA = bloc.totalCA;
+  let totalTickets = bloc.totalTickets;
+  let totalArticles = bloc.totalArticles;
+
+  if (demandeTicketIds.size > 0) {
+    const t2bTitleRowIdx = sheet.lastRow!.number + 2;
+    sheet.getCell(`A${t2bTitleRowIdx}`).value = "Dont : ventes avec demande de facture — à saisir individuellement";
+    sheet.getCell(`A${t2bTitleRowIdx}`).font = { bold: true, size: 12 };
+
+    const t2Header = sheet.addRow(["Mode de paiement", "Nb tickets", "Nb articles", "Total TTC"]);
+    styleHeaderRow(t2Header);
+    writeByMethodTable(sheet, facture.byMethod);
+
+    const factureTotalRow = sheet.addRow(["TOTAL demandes de facture", facture.totalTickets, facture.totalArticles, facture.totalCA]);
+    factureTotalRow.getCell(4).numFmt = CURRENCY_FMT;
+    styleTotalRow(factureTotalRow);
+
+    const reconcileRow = sheet.addRow([
+      "= Total réellement encaissé (bloc + demandes de facture)",
+      totalTickets + facture.totalTickets,
+      totalArticles + facture.totalArticles,
+      totalCA + facture.totalCA,
+    ]);
+    reconcileRow.getCell(1).font = { italic: true };
+    reconcileRow.getCell(4).numFmt = CURRENCY_FMT;
+    reconcileRow.eachCell((cell) => (cell.border = THIN_BORDER));
+
+    totalCA += facture.totalCA;
+    totalTickets += facture.totalTickets;
+    totalArticles += facture.totalArticles;
+  }
+
+  // ---- Tableau 3 : statistiques rapides (toutes ventes confondues) ----
+  const t3TitleRowIdx = sheet.lastRow!.number + 2;
+  sheet.getCell(`A${t3TitleRowIdx}`).value = "Statistiques rapides";
+  sheet.getCell(`A${t3TitleRowIdx}`).font = { bold: true, size: 12 };
 
   const panierMoyen = totalTickets > 0 ? totalCA / totalTickets : 0;
 
@@ -183,7 +242,7 @@ function buildSyntheseSheet(
   }
 }
 
-function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]) {
+function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[], demandeTicketIds: Set<string>) {
   const sheet = workbook.addWorksheet("Saisie ventes");
   const centered = { alignment: { horizontal: "center" as const } };
   sheet.columns = [
@@ -198,6 +257,7 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
     { header: "Remise %", key: "remise", width: 12, style: centered },
     { header: "Mode de paiement", key: "modePaiement", width: 18 },
     { header: "Statut", key: "statut", width: 12, style: centered },
+    { header: "Facture demandée", key: "factureDemandee", width: 16, style: centered },
     { header: "Motif annulation", key: "motif", width: 24 },
   ];
   styleHeaderRow(sheet.getRow(1));
@@ -212,6 +272,7 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
 
   for (const ticket of sorted) {
     shadeTicket = !shadeTicket;
+    const factureDemandee = demandeTicketIds.has(ticket.id);
     for (const item of ticket.ticket_items) {
       const pvpTtc = item.pvp_ttc === null || item.pvp_ttc === undefined ? null : Number(item.pvp_ttc);
       // Taux de remise (pas un montant) : indépendant de la quantité, donc
@@ -229,6 +290,7 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
         remise,
         modePaiement: labelByMethod.get(ticket.mode_paiement) ?? ticket.mode_paiement,
         statut: ticket.statut === "VALIDE" ? "Validé" : "Annulé",
+        factureDemandee: factureDemandee ? "Oui" : "Non",
         motif: ticket.motif_annulation ?? "",
       });
       row.getCell("pu").numFmt = CURRENCY_FMT;
@@ -248,6 +310,9 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
         puCell.font = { color: { argb: "FFE65100" }, bold: true };
         puCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE0B2" } };
       }
+      if (factureDemandee) {
+        row.getCell("factureDemandee").font = { color: { argb: "FF9A6700" }, bold: true };
+      }
       if (ticket.statut === "ANNULE") {
         row.eachCell((cell) => {
           cell.font = { color: { argb: "FF999999" }, italic: true };
@@ -256,7 +321,83 @@ function buildDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]
     }
   }
 
-  sheet.autoFilter = { from: "A1", to: "L1" };
+  sheet.autoFilter = { from: "A1", to: "M1" };
+}
+
+// Coordonnées client + détail produit des tickets avec demande de facture —
+// une ligne par (demande, produit), pour ressaisir facilement chaque
+// facture individuellement dans le système comptable. Jamais mélangé au
+// bloc "Saisie ventes" (voir la colonne "Facture demandée" là-bas pour le
+// repérer, et les tableaux de la synthèse pour éviter le double comptage).
+function buildDemandesFactureSheet(
+  workbook: ExcelJS.Workbook,
+  demandes: DemandeFacture[],
+  ticketsById: Map<string, TicketWithItems>
+) {
+  const sheet = workbook.addWorksheet("Demandes de facture");
+  const centered = { alignment: { horizontal: "center" as const } };
+  const labelByMethod = new Map(PAYMENT_METHODS.map((m) => [m.value, m.label]));
+
+  sheet.columns = [
+    { header: "Date", key: "date", width: 12, style: centered },
+    { header: "N° ticket", key: "numero", width: 12, style: centered },
+    { header: "Nom", key: "nom", width: 16 },
+    { header: "Prénom", key: "prenom", width: 16 },
+    { header: "Adresse", key: "adresse", width: 30 },
+    { header: "Téléphone", key: "telephone", width: 16 },
+    { header: "SIRET", key: "siret", width: 16 },
+    { header: "Mode de paiement", key: "modePaiement", width: 18 },
+    { header: "Référence", key: "reference", width: 16 },
+    { header: "Désignation", key: "designation", width: 32 },
+    { header: "Qté", key: "quantite", width: 8, style: centered },
+    { header: "PU (remisé)", key: "pu", width: 12 },
+    { header: "Total ligne", key: "totalLigne", width: 14 },
+  ];
+  styleHeaderRow(sheet.getRow(1));
+
+  let shade = false;
+  for (const demande of demandes) {
+    const ticket = ticketsById.get(demande.ticket_id);
+    shade = !shade;
+    const baseData = {
+      date: ticket ? formatDateFR(ticket.vente_date) : "",
+      numero: ticket?.numero ?? "",
+      nom: demande.client_nom,
+      prenom: demande.client_prenom,
+      adresse: demande.client_adresse,
+      telephone: demande.client_telephone,
+      siret: demande.client_siret ?? "",
+      modePaiement: ticket ? labelByMethod.get(ticket.mode_paiement) ?? ticket.mode_paiement : "",
+    };
+
+    if (!ticket || ticket.ticket_items.length === 0) {
+      const row = sheet.addRow(baseData);
+      row.eachCell((cell) => {
+        cell.border = THIN_BORDER;
+        if (shade) cell.fill = BAND_FILL;
+      });
+      continue;
+    }
+
+    for (const item of ticket.ticket_items) {
+      const row = sheet.addRow({
+        ...baseData,
+        reference: item.reference,
+        designation: item.designation,
+        quantite: item.quantite,
+        pu: Number(item.prix_unitaire),
+        totalLigne: Number(item.total_ligne),
+      });
+      row.getCell("pu").numFmt = CURRENCY_FMT;
+      row.getCell("totalLigne").numFmt = CURRENCY_FMT;
+      row.eachCell((cell) => {
+        cell.border = THIN_BORDER;
+        if (shade) cell.fill = BAND_FILL;
+      });
+    }
+  }
+
+  sheet.autoFilter = { from: "A1", to: "M1" };
 }
 
 export async function generateCaisseExport(
@@ -464,27 +605,38 @@ export async function generateEventArchive(
   caisseRows: CaisseRow[],
   comptages: CaisseComptage[],
   stockLines: StockLine[],
-  mouvements: MouvementStock[]
+  mouvements: MouvementStock[],
+  demandes: DemandeFacture[] = []
 ): Promise<ExcelJS.Buffer> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Caisse événementielle C.A.M.P. France";
   workbook.created = new Date();
 
   const valides = allTickets.filter((t) => t.statut === "VALIDE");
+  const demandeTicketIds = new Set(demandes.map((d) => d.ticket_id));
 
-  buildArchiveSyntheseSheet(workbook, eventNom, valides);
-  buildArchiveDetailSheet(workbook, allTickets);
+  buildArchiveSyntheseSheet(workbook, eventNom, valides, demandeTicketIds);
+  buildArchiveDetailSheet(workbook, allTickets, demandeTicketIds);
   if (caisseRows.length > 0) {
     buildCaisseSyntheseSheet(workbook, eventNom, caisseRows);
     buildCaisseDetailSheet(workbook, comptages);
   }
   if (stockLines.length > 0) buildStockSheet(workbook, stockLines);
   if (mouvements.length > 0) buildMouvementsSheet(workbook, mouvements);
+  if (demandes.length > 0) {
+    const ticketsById = new Map(allTickets.map((t) => [t.id, t]));
+    buildDemandesFactureSheet(workbook, demandes, ticketsById);
+  }
 
   return workbook.xlsx.writeBuffer();
 }
 
-function buildArchiveSyntheseSheet(workbook: ExcelJS.Workbook, eventNom: string, valides: TicketWithItems[]) {
+function buildArchiveSyntheseSheet(
+  workbook: ExcelJS.Workbook,
+  eventNom: string,
+  valides: TicketWithItems[],
+  demandeTicketIds: Set<string>
+) {
   const sheet = workbook.addWorksheet("Synthèse globale");
   sheet.columns = [{ width: 22 }, { width: 16 }, { width: 16 }, { width: 18 }];
 
@@ -494,57 +646,74 @@ function buildArchiveSyntheseSheet(workbook: ExcelJS.Workbook, eventNom: string,
   titleCell.font = { bold: true, size: 14 };
   sheet.getRow(1).height = 24;
 
-  // ---- Tableau 1 : totaux par mode de paiement (toutes dates confondues) ----
-  sheet.getCell("A3").value = "Totaux par mode de paiement";
+  // ---- Tableau 1 : totaux par mode de paiement, à traiter en bloc ----
+  // (exclut les ventes avec demande de facture, saisies individuellement
+  // dans le système comptable — sinon elles seraient comptées deux fois).
+  sheet.getCell("A3").value = "Totaux par mode de paiement — à traiter en bloc";
   sheet.getCell("A3").font = { bold: true, size: 12 };
 
   const t1Header = sheet.addRow(["Mode de paiement", "Nb tickets", "Nb articles", "Total TTC"]);
   styleHeaderRow(t1Header);
 
-  let totalTickets = 0;
-  let totalArticles = 0;
-  let totalCA = 0;
+  const bloc = computeByMethod(valides, demandeTicketIds);
+  writeByMethodTable(sheet, bloc.byMethod);
 
-  const byMethod = new Map<PaymentMethod, { nbTickets: number; nbArticles: number; total: number }>();
-  for (const { value } of PAYMENT_METHODS) byMethod.set(value, { nbTickets: 0, nbArticles: 0, total: 0 });
+  const totalRow = sheet.addRow(["TOTAL (hors demandes de facture)", bloc.totalTickets, bloc.totalArticles, bloc.totalCA]);
+  totalRow.getCell(4).numFmt = CURRENCY_FMT;
+  styleTotalRow(totalRow);
 
+  // ---- Tableau 2 : dont demandes de facture, à saisir individuellement ----
+  const facture = computeByMethod(
+    valides.filter((t) => demandeTicketIds.has(t.id)),
+    new Set()
+  );
+  let totalCA = bloc.totalCA;
+  let totalTickets = bloc.totalTickets;
+  let totalArticles = bloc.totalArticles;
+
+  if (demandeTicketIds.size > 0) {
+    const t2bTitleRowIdx = sheet.lastRow!.number + 2;
+    sheet.getCell(`A${t2bTitleRowIdx}`).value = "Dont : ventes avec demande de facture — à saisir individuellement";
+    sheet.getCell(`A${t2bTitleRowIdx}`).font = { bold: true, size: 12 };
+
+    const t2Header = sheet.addRow(["Mode de paiement", "Nb tickets", "Nb articles", "Total TTC"]);
+    styleHeaderRow(t2Header);
+    writeByMethodTable(sheet, facture.byMethod);
+
+    const factureTotalRow = sheet.addRow(["TOTAL demandes de facture", facture.totalTickets, facture.totalArticles, facture.totalCA]);
+    factureTotalRow.getCell(4).numFmt = CURRENCY_FMT;
+    styleTotalRow(factureTotalRow);
+
+    const reconcileRow = sheet.addRow([
+      "= Total réellement encaissé (bloc + demandes de facture)",
+      totalTickets + facture.totalTickets,
+      totalArticles + facture.totalArticles,
+      totalCA + facture.totalCA,
+    ]);
+    reconcileRow.getCell(1).font = { italic: true };
+    reconcileRow.getCell(4).numFmt = CURRENCY_FMT;
+    reconcileRow.eachCell((cell) => (cell.border = THIN_BORDER));
+
+    totalCA += facture.totalCA;
+    totalTickets += facture.totalTickets;
+    totalArticles += facture.totalArticles;
+  }
+
+  // ---- Tableau 3 : répartition par jour (toutes ventes confondues) ----
   const byDate = new Map<string, { nbTickets: number; total: number }>();
-
   for (const ticket of valides) {
-    const stats = byMethod.get(ticket.mode_paiement)!;
-    stats.nbTickets += 1;
-    stats.total += Number(ticket.total_ttc);
-    const nbArticles = ticket.ticket_items.reduce((sum, item) => sum + item.quantite, 0);
-    stats.nbArticles += nbArticles;
-
     const dateStats = byDate.get(ticket.vente_date) ?? { nbTickets: 0, total: 0 };
     dateStats.nbTickets += 1;
     dateStats.total += Number(ticket.total_ttc);
     byDate.set(ticket.vente_date, dateStats);
-
-    totalTickets += 1;
-    totalArticles += nbArticles;
-    totalCA += Number(ticket.total_ttc);
   }
 
-  for (const { value, label } of PAYMENT_METHODS) {
-    const stats = byMethod.get(value)!;
-    const row = sheet.addRow([label, stats.nbTickets, stats.nbArticles, stats.total]);
-    row.getCell(4).numFmt = CURRENCY_FMT;
-    row.eachCell((cell) => (cell.border = THIN_BORDER));
-  }
+  const t3TitleRowIdx = sheet.lastRow!.number + 2;
+  sheet.getCell(`A${t3TitleRowIdx}`).value = "Répartition par jour de vente";
+  sheet.getCell(`A${t3TitleRowIdx}`).font = { bold: true, size: 12 };
 
-  const totalRow = sheet.addRow(["TOTAL GÉNÉRAL", totalTickets, totalArticles, totalCA]);
-  totalRow.getCell(4).numFmt = CURRENCY_FMT;
-  styleTotalRow(totalRow);
-
-  // ---- Tableau 2 : répartition par jour ----
-  const t2TitleRowIdx = sheet.lastRow!.number + 2;
-  sheet.getCell(`A${t2TitleRowIdx}`).value = "Répartition par jour de vente";
-  sheet.getCell(`A${t2TitleRowIdx}`).font = { bold: true, size: 12 };
-
-  const t2Header = sheet.addRow(["Date", "Nb tickets", "", "Total TTC"]);
-  styleHeaderRow(t2Header);
+  const t3Header = sheet.addRow(["Date", "Nb tickets", "", "Total TTC"]);
+  styleHeaderRow(t3Header);
 
   const sortedDates = Array.from(byDate.keys()).sort();
   for (const date of sortedDates) {
@@ -554,10 +723,10 @@ function buildArchiveSyntheseSheet(workbook: ExcelJS.Workbook, eventNom: string,
     row.eachCell((cell) => (cell.border = THIN_BORDER));
   }
 
-  // ---- Tableau 3 : statistiques rapides ----
-  const t3TitleRowIdx = sheet.lastRow!.number + 2;
-  sheet.getCell(`A${t3TitleRowIdx}`).value = "Statistiques rapides";
-  sheet.getCell(`A${t3TitleRowIdx}`).font = { bold: true, size: 12 };
+  // ---- Tableau 4 : statistiques rapides ----
+  const t4TitleRowIdx = sheet.lastRow!.number + 2;
+  sheet.getCell(`A${t4TitleRowIdx}`).value = "Statistiques rapides";
+  sheet.getCell(`A${t4TitleRowIdx}`).font = { bold: true, size: 12 };
 
   const panierMoyen = totalTickets > 0 ? totalCA / totalTickets : 0;
 
@@ -590,7 +759,11 @@ function buildArchiveSyntheseSheet(workbook: ExcelJS.Workbook, eventNom: string,
   }
 }
 
-function buildArchiveDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWithItems[]) {
+function buildArchiveDetailSheet(
+  workbook: ExcelJS.Workbook,
+  tickets: TicketWithItems[],
+  demandeTicketIds: Set<string>
+) {
   const sheet = workbook.addWorksheet("Saisie ventes");
   const centered = { alignment: { horizontal: "center" as const } };
   sheet.columns = [
@@ -606,6 +779,7 @@ function buildArchiveDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWith
     { header: "Remise %", key: "remise", width: 12, style: centered },
     { header: "Mode de paiement", key: "modePaiement", width: 18 },
     { header: "Statut", key: "statut", width: 12, style: centered },
+    { header: "Facture demandée", key: "factureDemandee", width: 16, style: centered },
     { header: "Motif annulation", key: "motif", width: 24 },
   ];
   styleHeaderRow(sheet.getRow(1));
@@ -624,6 +798,7 @@ function buildArchiveDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWith
       shadeTicket = !shadeTicket;
       lastTicketId = ticket.id;
     }
+    const factureDemandee = demandeTicketIds.has(ticket.id);
     for (const item of ticket.ticket_items) {
       const pvpTtc = item.pvp_ttc === null || item.pvp_ttc === undefined ? null : Number(item.pvp_ttc);
       const remise = pvpTtc === null || pvpTtc === 0 ? null : (pvpTtc - Number(item.prix_unitaire)) / pvpTtc;
@@ -640,6 +815,7 @@ function buildArchiveDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWith
         remise,
         modePaiement: labelByMethod.get(ticket.mode_paiement) ?? ticket.mode_paiement,
         statut: ticket.statut === "VALIDE" ? "Validé" : "Annulé",
+        factureDemandee: factureDemandee ? "Oui" : "Non",
         motif: ticket.motif_annulation ?? "",
       });
       row.getCell("pu").numFmt = CURRENCY_FMT;
@@ -657,6 +833,9 @@ function buildArchiveDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWith
         puCell.font = { color: { argb: "FFE65100" }, bold: true };
         puCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE0B2" } };
       }
+      if (factureDemandee) {
+        row.getCell("factureDemandee").font = { color: { argb: "FF9A6700" }, bold: true };
+      }
       if (ticket.statut === "ANNULE") {
         row.eachCell((cell) => {
           cell.font = { color: { argb: "FF999999" }, italic: true };
@@ -665,5 +844,5 @@ function buildArchiveDetailSheet(workbook: ExcelJS.Workbook, tickets: TicketWith
     }
   }
 
-  sheet.autoFilter = { from: "A1", to: "M1" };
+  sheet.autoFilter = { from: "A1", to: "N1" };
 }

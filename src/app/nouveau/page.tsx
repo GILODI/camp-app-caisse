@@ -15,8 +15,8 @@ import { PaymentMethodPicker } from "@/components/PaymentMethodPicker";
 import { EventCodeGate } from "@/components/EventCodeGate";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { CashChangeCalculator } from "@/components/CashChangeCalculator";
-import { FactureDialog } from "@/components/FactureDialog";
-import type { CatalogueItem, DraftLine, EventRow, Facture, PaymentMethod, TicketWithItems } from "@/lib/types";
+import { DemandeFactureDialog } from "@/components/DemandeFactureDialog";
+import type { CatalogueItem, DemandeFacture, DraftLine, EventRow, PaymentMethod, TicketWithItems } from "@/lib/types";
 
 function NouveauTicketContent() {
   const { event, loading: eventLoading } = useActiveEvent();
@@ -73,8 +73,8 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
   const [result, setResult] = useState<TicketResult | null>(null);
   const [correctingSource, setCorrectingSource] = useState<TicketWithItems | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [showFactureDialog, setShowFactureDialog] = useState(false);
-  const [facture, setFacture] = useState<Facture | null>(null);
+  const [showDemandeFactureDialog, setShowDemandeFactureDialog] = useState(false);
+  const [demandeFacture, setDemandeFacture] = useState<DemandeFacture | null>(null);
 
   useEffect(() => {
     if (!correctId) return;
@@ -202,35 +202,14 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
     window.open(`/api/tickets/${result.id}/pdf`, "_blank");
   }
 
-  async function handleSendFacture() {
-    if (!facture) return;
-    try {
-      const res = await fetch(`/api/factures/${facture.id}`);
-      if (!res.ok) throw new Error("Impossible de récupérer la facture");
-      const blob = await res.blob();
-      const file = new File([blob], `${facture.numero_affiche}.pdf`, { type: "application/pdf" });
-
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: `Facture ${facture.numero_affiche}` });
-        return;
-      }
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      // Partage impossible (navigateur trop ancien, erreur réseau...) : on
-      // retombe sur l'ouverture du PDF, que le vendeur peut alors partager
-      // manuellement depuis le lecteur PDF du téléphone.
-    }
-    window.open(`/api/factures/${facture.id}`, "_blank");
-  }
-
   function resetForm() {
     setLines([]);
     setMode(null);
     setResult(null);
     setPendingLocalId(null);
     setCorrectingSource(null);
-    setFacture(null);
-    setShowFactureDialog(false);
+    setDemandeFacture(null);
+    setShowDemandeFactureDialog(false);
     router.replace("/nouveau");
   }
 
@@ -300,16 +279,13 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
           📤 Envoyer le reçu au client
         </button>
 
-        {facture ? (
-          <button
-            onClick={handleSendFacture}
-            className="w-full rounded-lg border border-black/15 py-3.5 text-lg font-semibold text-foreground"
-          >
-            📤 Envoyer la facture {facture.numero_affiche}
-          </button>
+        {demandeFacture ? (
+          <p className="w-full rounded-lg border border-green-200 bg-green-50 py-3.5 text-center text-sm font-medium text-green-800">
+            ✅ Demande de facture enregistrée pour {demandeFacture.client_prenom} {demandeFacture.client_nom}
+          </p>
         ) : (
           <button
-            onClick={() => setShowFactureDialog(true)}
+            onClick={() => setShowDemandeFactureDialog(true)}
             className="w-full rounded-lg border border-black/15 py-3.5 text-lg font-semibold text-foreground"
           >
             🧾 Le client demande une facture
@@ -323,14 +299,14 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
           Nouveau ticket
         </button>
 
-        {showFactureDialog && (
-          <FactureDialog
+        {showDemandeFactureDialog && (
+          <DemandeFactureDialog
             ticketId={result.id}
             vendeur={vendeur}
-            onClose={() => setShowFactureDialog(false)}
-            onCreated={(f) => {
-              setFacture(f);
-              setShowFactureDialog(false);
+            onClose={() => setShowDemandeFactureDialog(false)}
+            onCreated={(d) => {
+              setDemandeFacture(d);
+              setShowDemandeFactureDialog(false);
             }}
           />
         )}

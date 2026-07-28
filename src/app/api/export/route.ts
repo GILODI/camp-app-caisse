@@ -3,7 +3,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { generateDailyExport, buildExportFilename } from "@/lib/excelExport";
 import { isAdminRequest } from "@/lib/adminAuth";
 import { normalizeAccessCode } from "@/lib/accessCode";
-import type { TicketWithItems } from "@/lib/types";
+import type { DemandeFacture, TicketWithItems } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -47,7 +47,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: ticketsError.message }, { status: 500 });
   }
 
-  const buffer = await generateDailyExport(event.nom, date, (tickets ?? []) as TicketWithItems[]);
+  const ticketIds = new Set((tickets ?? []).map((t) => t.id));
+  const { data: demandesData } = await supabaseServer
+    .from("demandes_facture")
+    .select("*")
+    .eq("event_id", eventId);
+  const demandes = ((demandesData ?? []) as DemandeFacture[]).filter((d) => ticketIds.has(d.ticket_id));
+
+  const buffer = await generateDailyExport(event.nom, date, (tickets ?? []) as TicketWithItems[], demandes);
   const filename = buildExportFilename(event.nom, date);
 
   return new NextResponse(buffer, {
