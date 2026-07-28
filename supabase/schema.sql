@@ -192,9 +192,12 @@ create table if not exists public.facture_counters (
 );
 
 -- ----------------------------------------------------------------------------
--- factures : facture émise à la demande d'un client sur un ticket déjà
--- validé. Le ticket reste la pièce de caisse (obligation logiciel certifié) ;
--- la facture est un document client complémentaire, jamais un substitut.
+-- factures : ANCIEN mécanisme (génération d'une facture légale numérotée
+-- directement par l'appli). Abandonné sur décision de l'expert-comptable :
+-- la vraie facture est désormais ressaisie individuellement dans le système
+-- comptable de l'entreprise, pas générée ici — voir demandes_facture
+-- ci-dessous. Table conservée telle quelle (jamais de suppression), plus
+-- jamais alimentée par du code nouveau.
 -- ----------------------------------------------------------------------------
 create table if not exists public.factures (
   id uuid primary key default gen_random_uuid(),
@@ -218,6 +221,29 @@ create table if not exists public.factures (
 
 create index if not exists factures_ticket_idx on public.factures (ticket_id);
 create index if not exists factures_event_idx on public.factures (event_id);
+
+-- ----------------------------------------------------------------------------
+-- demandes_facture : le client souhaite une facture, à établir plus tard
+-- dans le système comptable de l'entreprise (ressaisie individuelle, décision
+-- de l'expert-comptable) — l'appli se limite à capter la demande et les
+-- coordonnées, jamais à générer la facture elle-même. Retrouvable dans les
+-- exports Excel (jour et archive) avec le détail des produits du ticket lié.
+-- ----------------------------------------------------------------------------
+create table if not exists public.demandes_facture (
+  id uuid primary key default gen_random_uuid(),
+  ticket_id uuid not null references public.tickets(id),
+  event_id uuid not null references public.events(id),
+  client_nom text not null,
+  client_prenom text not null,
+  client_adresse text not null,
+  client_telephone text not null,
+  client_siret text,
+  created_by text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists demandes_facture_ticket_idx on public.demandes_facture (ticket_id);
+create index if not exists demandes_facture_event_idx on public.demandes_facture (event_id);
 
 -- ----------------------------------------------------------------------------
 -- clotures : verrouillage périodique (archivage ISCA). Une clôture "jour"
@@ -691,9 +717,11 @@ alter table public.mouvements_stock enable row level security;
 alter table public.factures enable row level security;
 alter table public.facture_counters enable row level security;
 alter table public.clotures enable row level security;
--- factures / facture_counters : pas de policy de lecture publique — données
--- client (nom, adresse, SIRET) accessibles uniquement via service_role
--- (routes API serveur), jamais depuis le navigateur.
+alter table public.demandes_facture enable row level security;
+-- factures / facture_counters / demandes_facture : pas de policy de lecture
+-- publique — données client (nom, adresse, téléphone, SIRET) accessibles
+-- uniquement via service_role (routes API serveur), jamais depuis le
+-- navigateur.
 
 drop policy if exists "lecture publique events" on public.events;
 create policy "lecture publique events" on public.events for select using (true);

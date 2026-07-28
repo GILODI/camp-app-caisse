@@ -4,7 +4,7 @@ import { isAdminRequest } from "@/lib/adminAuth";
 import { generateEventArchive, buildEventArchiveFilename } from "@/lib/excelExport";
 import { computeCaisseRows } from "@/lib/caisseCalc";
 import { computeStockLines } from "@/lib/stock";
-import type { CaisseComptage, MouvementStock, TicketWithItems } from "@/lib/types";
+import type { CaisseComptage, DemandeFacture, MouvementStock, TicketWithItems } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -25,11 +25,13 @@ export async function GET(req: NextRequest) {
     { data: comptagesData, error: comptagesError },
     { data: catalogue },
     { data: mouvementsData, error: mouvementsError },
+    { data: demandesData },
   ] = await Promise.all([
     supabaseServer.from("tickets").select("*, ticket_items(*)").eq("event_id", eventId).order("numero", { ascending: true }),
     supabaseServer.from("caisse_comptages").select("*").eq("event_id", eventId),
     supabaseServer.from("catalogue_items").select("reference, designation, stock_initial").eq("event_id", eventId),
     supabaseServer.from("mouvements_stock").select("*").eq("event_id", eventId).order("created_at", { ascending: true }),
+    supabaseServer.from("demandes_facture").select("*").eq("event_id", eventId),
   ]);
 
   if (ticketsError) return NextResponse.json({ error: ticketsError.message }, { status: 500 });
@@ -58,7 +60,8 @@ export async function GET(req: NextRequest) {
     caisseRows,
     comptages,
     stockLines,
-    (mouvementsData ?? []) as MouvementStock[]
+    (mouvementsData ?? []) as MouvementStock[],
+    (demandesData ?? []) as DemandeFacture[]
   );
   const filename = buildEventArchiveFilename(event.nom);
 
