@@ -22,13 +22,14 @@ export function DemandeFactureDialog({
   const [prenom, setPrenom] = useState("");
   const [adresse, setAdresse] = useState("");
   const [telephone, setTelephone] = useState("");
+  const [email, setEmail] = useState("");
   const [siret, setSiret] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!nom.trim() || !prenom.trim() || !adresse.trim() || !telephone.trim()) {
-      toast.error("Nom, prénom, adresse et téléphone requis");
+    if (!nom.trim() || !prenom.trim() || !adresse.trim() || !telephone.trim() || !email.trim()) {
+      toast.error("Nom, prénom, adresse, téléphone et email requis");
       return;
     }
     setSubmitting(true);
@@ -41,6 +42,7 @@ export function DemandeFactureDialog({
           client_prenom: prenom.trim(),
           client_adresse: adresse.trim(),
           client_telephone: telephone.trim(),
+          client_email: email.trim(),
           client_siret: siret.trim() || undefined,
           by: vendeur,
         }),
@@ -107,6 +109,17 @@ export function DemandeFactureDialog({
             onChange={(e) => setTelephone(e.target.value)}
             required
             type="tel"
+            className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+          />
+        </label>
+
+        <label className="block text-sm font-medium">
+          Email *
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            type="email"
             className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
           />
         </label>
