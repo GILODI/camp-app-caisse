@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useActiveEvent, useTodaySales } from "@/lib/hooks";
 import { getStoredVendeur } from "@/lib/currentVendeur";
@@ -34,10 +34,27 @@ export default function VentesDuJourPage() {
 function VentesContent({ event }: { event: EventRow }) {
   const { tickets, loading, venteDate } = useTodaySales(event.id);
   const [vendeur, setVendeur] = useState<string | null>(null);
+  const [demandeTicketIds, setDemandeTicketIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setVendeur(getStoredVendeur());
   }, []);
+
+  // Quels tickets ont déjà une demande de facture (ids seuls, sans les
+  // coordonnées client) — pour ne pas proposer deux fois la même demande.
+  const loadDemandes = useCallback(async () => {
+    const code = getUnlockedCode(event.id);
+    if (!code) return;
+    const res = await fetch(
+      `/api/demandes-facture/tickets?event_id=${event.id}&code=${encodeURIComponent(code)}`
+    );
+    if (!res.ok) return;
+    setDemandeTicketIds(new Set((await res.json()) as string[]));
+  }, [event.id]);
+
+  useEffect(() => {
+    loadDemandes();
+  }, [loadDemandes]);
 
   if (loading) return <p className="p-6 text-center text-black/50">Chargement…</p>;
 
@@ -62,7 +79,12 @@ function VentesContent({ event }: { event: EventRow }) {
         </a>
       </div>
 
-      <SalesList tickets={tickets} currentVendeur={vendeur ?? "Inconnu"} />
+      <SalesList
+        tickets={tickets}
+        currentVendeur={vendeur ?? "Inconnu"}
+        demandeTicketIds={demandeTicketIds}
+        onDemandeCreated={(ticketId) => setDemandeTicketIds((prev) => new Set(prev).add(ticketId))}
+      />
 
       <p className="pt-2 text-center text-xs text-black/30">
         <Link href="/nouveau" className="underline">

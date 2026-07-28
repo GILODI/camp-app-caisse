@@ -55,6 +55,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .select()
     .single();
 
+  // 23505 = violation d'unicité : une demande existe déjà sur ce ticket
+  // (double validation du formulaire, ou demande déjà saisie plus tôt).
+  if (error?.code === "23505") {
+    return NextResponse.json(
+      { error: "Une demande de facture est déjà enregistrée pour ce ticket." },
+      { status: 409 }
+    );
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json(data, { status: 201 });

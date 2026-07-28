@@ -34,5 +34,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
+  await reportDemandeFacture(id, (data as { id: string }).id);
+
   return NextResponse.json(data, { status: 201 });
+}
+
+// Une correction annule l'ancien ticket et en crée un nouveau : si le client
+// avait demandé une facture, elle doit suivre la vente réelle, sinon on
+// facturerait un ticket annulé. La demande d'origine reste attachée au
+// ticket annulé (jamais de suppression), on en recopie une sur le nouveau.
+async function reportDemandeFacture(ancienTicketId: string, nouveauTicketId: string) {
+  const { data: demande } = await supabaseServer
+    .from("demandes_facture")
+    .select("*")
+    .eq("ticket_id", ancienTicketId)
+    .maybeSingle();
+
+  if (!demande) return;
+
+  await supabaseServer.from("demandes_facture").insert({
+    ticket_id: nouveauTicketId,
+    event_id: demande.event_id,
+    client_nom: demande.client_nom,
+    client_prenom: demande.client_prenom,
+    client_adresse: demande.client_adresse,
+    client_telephone: demande.client_telephone,
+    client_email: demande.client_email,
+    client_siret: demande.client_siret,
+    created_by: demande.created_by,
+  });
 }
