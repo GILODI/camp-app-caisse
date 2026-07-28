@@ -294,6 +294,7 @@ create unique index if not exists clotures_evenement_idx
 create or replace function public.next_ticket_number(p_event_id uuid, p_vente_date date)
 returns integer
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
   v_number integer;
@@ -320,6 +321,7 @@ create or replace function public.create_ticket(
 )
 returns table (id uuid, numero integer, vente_date date, total_ttc numeric)
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
   v_vente_date date := (now() at time zone 'Europe/Paris')::date;
@@ -375,6 +377,7 @@ create or replace function public.cancel_ticket(
 )
 returns void
 language plpgsql
+set search_path = public, pg_temp
 as $$
 begin
   if exists (
@@ -412,6 +415,7 @@ create or replace function public.correct_ticket(
 )
 returns table (id uuid, numero integer, vente_date date, total_ttc numeric)
 language plpgsql
+set search_path = public, pg_temp
 as $$
 begin
   perform public.cancel_ticket(p_ticket_id, 'Correction', p_by);
@@ -439,6 +443,7 @@ create or replace function public.admin_correct_ticket(
 )
 returns table (id uuid, numero integer, vente_date date, total_ttc numeric)
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
   v_event_id uuid;
@@ -497,6 +502,7 @@ $$;
 create or replace function public.next_facture_number(p_annee integer)
 returns integer
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
   v_number integer;
@@ -524,6 +530,7 @@ create or replace function public.create_facture(
 )
 returns public.factures
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
   v_ticket public.tickets;
@@ -585,6 +592,7 @@ create or replace function public.save_comptage(
 )
 returns public.caisse_comptages
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
   v_row public.caisse_comptages;
@@ -660,6 +668,7 @@ $$;
 create or replace function public.reset_event_test_data(p_event_id uuid)
 returns void
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
   v_is_test boolean;
@@ -695,6 +704,7 @@ $$;
 create or replace function public.close_day(p_event_id uuid, p_vente_date date, p_by text)
 returns public.clotures
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
   v_nb_tickets integer;
@@ -735,6 +745,7 @@ $$;
 create or replace function public.close_event(p_event_id uuid, p_by text)
 returns public.clotures
 language plpgsql
+set search_path = public, pg_temp
 as $$
 declare
   v_open_days integer;
