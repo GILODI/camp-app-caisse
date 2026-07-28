@@ -673,7 +673,12 @@ begin
     raise exception 'Cet événement n''est pas marqué comme événement de test — suppression refusée';
   end if;
 
+  -- factures et demandes_facture référencent tickets sans cascade : elles
+  -- doivent être vidées AVANT, sinon la suppression des tickets échoue sur
+  -- une violation de clé étrangère. Toute nouvelle table pointant vers
+  -- tickets devra être ajoutée ici.
   delete from public.factures where event_id = p_event_id;
+  delete from public.demandes_facture where event_id = p_event_id;
   delete from public.tickets where event_id = p_event_id;
   delete from public.mouvements_stock where event_id = p_event_id;
   delete from public.caisse_comptages where event_id = p_event_id;
