@@ -42,6 +42,11 @@ const LINKS = [
     desc: "Coordonnées client à ressaisir dans le système comptable, par événement.",
   },
   {
+    href: "/admin/corriger",
+    title: "Corriger un ticket passé",
+    desc: "Rattraper une erreur d'une journée précédente, tant qu'elle n'est pas clôturée.",
+  },
+  {
     href: "/admin/clotures",
     title: "Clôtures",
     desc: "Figer définitivement les ventes d'un jour ou de l'événement (archivage, empreinte de contrôle).",

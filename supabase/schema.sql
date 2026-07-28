@@ -421,6 +421,76 @@ begin
 end;
 $$;
 
+-- Correction d'un ticket d'une journée passée (réservée à l'admin).
+-- Contrairement à correct_ticket, le ticket de remplacement conserve la DATE
+-- DE VENTE d'origine : la vente ne doit pas changer de journée, sinon la
+-- réconciliation du soir et les clôtures ne tiennent plus. Fonction au nom
+-- distinct (et non un paramètre de plus sur create_ticket) pour ne créer
+-- aucune ambiguïté de surcharge avec les fonctions existantes.
+-- L'annulation passe par cancel_ticket, qui refuse déjà les journées
+-- clôturées — le nouveau ticket étant sur la même date, la même garde couvre
+-- l'ensemble de l'opération.
+create or replace function public.admin_correct_ticket(
+  p_ticket_id uuid,
+  p_vendeur text,
+  p_mode_paiement text,
+  p_items jsonb,
+  p_by text
+)
+returns table (id uuid, numero integer, vente_date date, total_ttc numeric)
+language plpgsql
+as $$
+declare
+  v_event_id uuid;
+  v_vente_date date;
+  v_numero integer;
+  v_ticket_id uuid;
+  v_total numeric(10,2);
+  v_item jsonb;
+begin
+  if jsonb_array_length(p_items) = 0 then
+    raise exception 'Un ticket doit contenir au moins une ligne';
+  end if;
+
+  select t.event_id, t.vente_date
+    into v_event_id, v_vente_date
+    from public.tickets t
+   where t.id = p_ticket_id;
+
+  if v_event_id is null then
+    raise exception 'Ticket introuvable';
+  end if;
+
+  perform public.cancel_ticket(p_ticket_id, 'Correction (admin)', p_by);
+
+  select coalesce(sum((elem->>'prix_unitaire')::numeric * (elem->>'quantite')::integer), 0)
+    into v_total
+    from jsonb_array_elements(p_items) as elem;
+
+  v_numero := public.next_ticket_number(v_event_id, v_vente_date);
+
+  insert into public.tickets (event_id, numero, vente_date, vendeur, mode_paiement, total_ttc, remplace_ticket_id)
+  values (v_event_id, v_numero, v_vente_date, p_vendeur, p_mode_paiement, v_total, p_ticket_id)
+  returning tickets.id into v_ticket_id;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    insert into public.ticket_items (ticket_id, reference, designation, prix_unitaire, pvp_ttc, prix_modifie, quantite)
+    values (
+      v_ticket_id,
+      v_item->>'reference',
+      v_item->>'designation',
+      (v_item->>'prix_unitaire')::numeric,
+      nullif(v_item->>'pvp_ttc', '')::numeric,
+      coalesce((v_item->>'prix_modifie')::boolean, false),
+      (v_item->>'quantite')::integer
+    );
+  end loop;
+
+  return query select v_ticket_id, v_numero, v_vente_date, v_total;
+end;
+$$;
+
 -- Attribution atomique du numéro de facture de l'année en cours.
 -- Séquence unique, jamais de trou : même une facture annulée garderait son
 -- numéro (pas de suppression prévue côté factures).

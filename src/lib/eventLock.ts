@@ -1,5 +1,7 @@
 "use client";
 
+import { EVENT_CODE_HEADER } from "./accessCode";
+
 function key(eventId: string) {
   return `camp-caisse:unlocked:${eventId}`;
 }
@@ -18,4 +20,11 @@ export function getUnlockedCode(eventId: string): string | null {
 
 export function markEventUnlocked(eventId: string, code: string) {
   window.localStorage.setItem(key(eventId), code);
+}
+
+// En-tête à joindre aux appels d'API de vente (création, annulation,
+// correction, reçu, demande de facture) : sans lui, le serveur refuse.
+export function eventCodeHeaders(eventId: string): Record<string, string> {
+  const code = getUnlockedCode(eventId);
+  return code ? { [EVENT_CODE_HEADER]: code } : {};
 }

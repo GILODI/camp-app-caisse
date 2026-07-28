@@ -13,3 +13,8 @@ export function generateAccessCode(length = 6): string {
 export function normalizeAccessCode(code: string): string {
   return code.trim().toUpperCase();
 }
+
+// En-tête portant le code d'accès de l'événement sur les appels d'API de
+// vente. Défini ici (module sans dépendance) pour être partagé entre le
+// navigateur et les routes serveur.
+export const EVENT_CODE_HEADER = "x-event-code";

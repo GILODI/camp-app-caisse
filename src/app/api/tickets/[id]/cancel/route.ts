@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { isTicketRequestAllowed } from "@/lib/eventAuth";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  if (!(await isTicketRequestAllowed(req, id))) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
+
   const body = await req.json().catch(() => ({}));
   const motif: string = (body.motif ?? "").trim() || "Non précisé";
   const by: string = (body.by ?? "").trim() || "Inconnu";

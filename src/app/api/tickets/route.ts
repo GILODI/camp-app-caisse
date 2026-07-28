@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { isEventRequestAllowed } from "@/lib/eventAuth";
 import type { NewTicketPayload } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -16,6 +17,9 @@ export async function POST(req: NextRequest) {
 
   if (!event_id || !vendeur || !mode_paiement) {
     return NextResponse.json({ error: "Champs requis manquants" }, { status: 400 });
+  }
+  if (!(await isEventRequestAllowed(req, event_id))) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
   if (!Array.isArray(items) || items.length === 0) {
     return NextResponse.json({ error: "Le ticket doit contenir au moins une ligne" }, { status: 400 });

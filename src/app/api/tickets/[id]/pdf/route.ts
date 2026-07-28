@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { renderTicketPdf } from "@/lib/ticketPdf";
+import { isTicketRequestAllowed } from "@/lib/eventAuth";
 import type { TicketItem } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 // Sert le PDF du ticket de caisse (reçu client) — pièce déjà enregistrée en
 // base, jamais reconstruite à partir de ce que le vendeur a sous les yeux.
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  if (!(await isTicketRequestAllowed(req, id))) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
 
   const { data: ticket, error: ticketError } = await supabaseServer
     .from("tickets")
