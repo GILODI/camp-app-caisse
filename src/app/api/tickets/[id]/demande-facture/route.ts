@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { isTicketRequestAllowed } from "@/lib/eventAuth";
 import type { NewDemandeFacturePayload } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -9,6 +10,10 @@ export const runtime = "nodejs";
 // coordonnées du client (voir schema.sql, table demandes_facture).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  if (!(await isTicketRequestAllowed(req, id))) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
 
   let payload: NewDemandeFacturePayload;
   try {

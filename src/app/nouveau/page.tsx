@@ -9,6 +9,7 @@ import { STOCK_LOW_THRESHOLD } from "@/lib/stock";
 import { getStoredVendeur } from "@/lib/currentVendeur";
 import { getTicketQueue, type TicketResult } from "@/lib/offlineQueue";
 import { shareTicketPdf } from "@/lib/shareTicket";
+import { eventCodeHeaders } from "@/lib/eventLock";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { ProductAutocomplete } from "@/components/ProductAutocomplete";
 import { TicketLinesEditor } from "@/components/TicketLinesEditor";
@@ -184,7 +185,7 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
 
   async function handleSendReceipt() {
     if (!result) return;
-    await shareTicketPdf(result.id, result.numero);
+    await shareTicketPdf(result.id, result.numero, event.id);
   }
 
   function resetForm() {
@@ -220,7 +221,7 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
       try {
         const res = await fetch(`/api/tickets/${correctingSource.id}/correct`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...eventCodeHeaders(event.id) },
           body: JSON.stringify({ ...payload, by: vendeur }),
         });
         const body = await res.json();
@@ -287,6 +288,7 @@ function NouveauTicketForm({ event, vendeur }: { event: EventRow; vendeur: strin
         {showDemandeFactureDialog && (
           <DemandeFactureDialog
             ticketId={result.id}
+            eventId={event.id}
             vendeur={vendeur}
             onClose={() => setShowDemandeFactureDialog(false)}
             onCreated={(d) => {

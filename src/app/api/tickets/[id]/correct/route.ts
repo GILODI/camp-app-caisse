@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { isTicketRequestAllowed } from "@/lib/eventAuth";
 import type { NewTicketPayload } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  if (!(await isTicketRequestAllowed(req, id))) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
+
   let payload: NewTicketPayload & { by?: string };
   try {
     payload = await req.json();

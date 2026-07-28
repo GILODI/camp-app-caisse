@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { eventCodeHeaders } from "@/lib/eventLock";
 import type { DemandeFacture } from "@/lib/types";
 
 // Le client souhaite une facture : on note ses coordonnées pour que la
@@ -9,11 +10,13 @@ import type { DemandeFacture } from "@/lib/types";
 // reste la pièce de caisse, l'appli ne génère jamais la facture elle-même.
 export function DemandeFactureDialog({
   ticketId,
+  eventId,
   vendeur,
   onClose,
   onCreated,
 }: {
   ticketId: string;
+  eventId: string;
   vendeur: string;
   onClose: () => void;
   onCreated: (demande: DemandeFacture) => void;
@@ -36,7 +39,7 @@ export function DemandeFactureDialog({
     try {
       const res = await fetch(`/api/tickets/${ticketId}/demande-facture`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...eventCodeHeaders(eventId) },
         body: JSON.stringify({
           client_nom: nom.trim(),
           client_prenom: prenom.trim(),

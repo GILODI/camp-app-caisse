@@ -81,7 +81,7 @@ export function SalesList({
               {ticket.statut === "VALIDE" && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
-                    onClick={() => shareTicketPdf(ticket.id, ticket.numero)}
+                    onClick={() => shareTicketPdf(ticket.id, ticket.numero, ticket.event_id)}
                     className="rounded-md border border-brand px-3 py-1.5 text-xs font-medium text-brand"
                   >
                     📤 Reçu
@@ -120,6 +120,7 @@ export function SalesList({
       {demandeFor && (
         <DemandeFactureDialog
           ticketId={demandeFor.id}
+          eventId={demandeFor.event_id}
           vendeur={currentVendeur}
           onClose={() => setDemandeFor(null)}
           onCreated={() => {

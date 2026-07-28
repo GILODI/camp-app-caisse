@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { eventCodeHeaders } from "@/lib/eventLock";
 import type { Ticket } from "@/lib/types";
 
 export function CancelTicketDialog({
@@ -21,7 +22,7 @@ export function CancelTicketDialog({
     try {
       const res = await fetch(`/api/tickets/${ticket.id}/cancel`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...eventCodeHeaders(ticket.event_id) },
         body: JSON.stringify({ motif, by }),
       });
       const body = await res.json().catch(() => ({}));

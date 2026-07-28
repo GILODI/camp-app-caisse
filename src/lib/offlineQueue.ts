@@ -1,6 +1,7 @@
 "use client";
 
 import type { NewTicketPayload } from "./types";
+import { eventCodeHeaders } from "./eventLock";
 
 export interface TicketResult {
   id: string;
@@ -100,7 +101,7 @@ class TicketQueue {
     try {
       res = await fetch("/api/tickets", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...eventCodeHeaders(payload.event_id) },
         body: JSON.stringify(payload),
       });
     } catch {
@@ -109,6 +110,13 @@ class TicketQueue {
 
     if (res.status >= 500) {
       throw new NetworkError(`Erreur serveur (${res.status})`);
+    }
+    // 401 = code d'accès absent ou changé entre-temps. Surtout pas une
+    // erreur définitive : le ticket resterait sinon perdu alors que la vente
+    // a bien eu lieu. On le garde en file, il repartira dès que l'événement
+    // sera de nouveau déverrouillé sur ce téléphone.
+    if (res.status === 401) {
+      throw new NetworkError("Accès à l'événement à revalider");
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
