@@ -240,7 +240,14 @@ create table if not exists public.demandes_facture (
   client_email text not null default '',
   client_siret text,
   created_by text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Coordonnées effacées une fois la facture établie dans l'ERP (RGPD : on
+  -- ne conserve pas des données personnelles devenues inutiles). La LIGNE
+  -- est conservée : c'est elle qui porte le marqueur « facture demandée »,
+  -- lequel sort la vente du total à traiter en bloc dans les exports. La
+  -- supprimer ferait réapparaître ces ventes dans le bloc et rendrait une
+  -- archive régénérée incohérente avec ce qui a été déclaré.
+  anonymise_at timestamptz
 );
 
 -- Une seule demande de facture par ticket : évite qu'un double-clic ou une
