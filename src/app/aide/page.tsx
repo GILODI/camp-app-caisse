@@ -115,18 +115,38 @@ export default function AidePage() {
       </Section>
 
       <Section title="7. Après l'événement (responsable)">
-        <ol className="list-decimal space-y-1 pl-5">
+        <p className="mb-1 text-black/60">
+          À suivre dans cet ordre : chaque étape suppose la précédente.
+        </p>
+        <ol className="list-decimal space-y-1.5 pl-5">
           <li>
-            Admin → <strong>Clôtures</strong>{" "}
-            : clôturer chaque journée de vente, puis l&apos;événement.
+            <strong>Vérifier les ventes.</strong>{" "}
+            Une erreur repérée après coup se corrige dans Admin →{" "}
+            <strong>Corriger un ticket passé</strong>, tant que la journée n&apos;est pas clôturée. La date de
+            vente d&apos;origine est conservée.
           </li>
           <li>
-            Une journée clôturée est définitivement figée : plus aucun ticket ne peut y être ajouté, corrigé ou
-            annulé. C&apos;est ce qui garantit la conformité fiscale de la caisse.
+            <strong>Télécharger l&apos;archive.</strong>{" "}
+            Admin → Export fin de journée → « Archive complète » : un seul fichier avec toutes les ventes, le
+            stock, la caisse espèces et les demandes de facture.
           </li>
           <li>
-            Admin → <strong>Export fin de journée</strong> → « Archive complète » : un seul fichier Excel avec
-            toutes les ventes, le stock, la caisse espèces et les demandes de facture.
+            <strong>Saisir en comptabilité.</strong>{" "}
+            Les totaux par mode de paiement se traitent en bloc. Les ventes de la feuille « Demandes de facture »
+            se saisissent une par une, puis les factures sont envoyées aux clients.
+          </li>
+          <li>
+            <strong>Effacer les coordonnées clients.</strong>{" "}
+            Une fois les factures envoyées : Admin → Demandes de facture →{" "}
+            <strong>Effacer les coordonnées de cet événement</strong>. Le client existe désormais dans l&apos;ERP,
+            l&apos;appli n&apos;a plus à conserver ses données personnelles. Les ventes, elles, restent intactes
+            dans les exports.
+          </li>
+          <li>
+            <strong>Clôturer.</strong>{" "}
+            Admin → Clôtures : chaque journée de vente, puis l&apos;événement. Une journée clôturée est
+            définitivement figée — plus aucun ticket ne peut y être ajouté, corrigé ou annulé. C&apos;est ce qui
+            garantit la conformité fiscale de la caisse.
           </li>
         </ol>
       </Section>
@@ -136,6 +156,14 @@ export default function AidePage() {
         Pas de panique : un ticket en cours de validation n&apos;est jamais perdu. L&apos;app retente
         automatiquement l&apos;envoi dès que la connexion revient. Ne pas fermer la page tant que « Envoi en
         cours… » est affiché.
+      </div>
+
+      <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+        <strong>Ne pas changer le code d&apos;accès pendant l&apos;événement.</strong>{" "}
+        Le code sert à chaque vente, pas seulement à l&apos;ouverture de l&apos;app. Le modifier bloque aussitôt
+        tous les téléphones et met en attente les tickets non encore transmis — ils repartiront une fois le
+        nouveau code saisi, rien n&apos;est perdu, mais la vente s&apos;arrête en attendant. À réserver à la fin
+        de l&apos;événement, pour couper l&apos;accès.
       </div>
     </div>
   );
