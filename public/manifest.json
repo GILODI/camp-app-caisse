@@ -1,6 +1,6 @@
 {
-  "name": "Caisse_événement",
-  "short_name": "Caisse_événement",
+  "name": "CampSell",
+  "short_name": "CampSell",
   "description": "Saisie des ventes sur stand événementiel C.A.M.P. France",
   "start_url": "/nouveau",
   "scope": "/",

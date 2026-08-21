@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Caisse événementielle C.A.M.P. France",
+  title: "CampSell — C.A.M.P. France",
   description: "Saisie des ventes sur stand événementiel C.A.M.P. France",
   manifest: "/manifest.json",
   icons: {
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Caisse_événement",
+    title: "CampSell",
   },
 };
 

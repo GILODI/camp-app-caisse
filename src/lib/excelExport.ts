@@ -83,7 +83,7 @@ export async function generateDailyExport(
   demandes: DemandeFacture[] = []
 ): Promise<ExcelJS.Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Caisse événementielle C.A.M.P. France";
+  workbook.creator = "CampSell — C.A.M.P. France";
   workbook.created = new Date();
 
   const valides = tickets.filter((t) => t.statut === "VALIDE");
@@ -433,7 +433,7 @@ export async function generateCaisseExport(
   comptages: CaisseComptage[]
 ): Promise<ExcelJS.Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Caisse événementielle C.A.M.P. France";
+  workbook.creator = "CampSell — C.A.M.P. France";
   workbook.created = new Date();
 
   buildCaisseSyntheseSheet(workbook, eventNom, rows);
@@ -523,7 +523,7 @@ function buildCaisseDetailSheet(workbook: ExcelJS.Workbook, comptages: CaisseCom
 
 export async function generateStockExport(eventNom: string, lines: StockLine[]): Promise<ExcelJS.Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Caisse événementielle C.A.M.P. France";
+  workbook.creator = "CampSell — C.A.M.P. France";
   workbook.created = new Date();
 
   buildStockSheet(workbook, lines);
@@ -581,7 +581,7 @@ export async function generateMouvementsExport(
   mouvements: MouvementStock[]
 ): Promise<ExcelJS.Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Caisse événementielle C.A.M.P. France";
+  workbook.creator = "CampSell — C.A.M.P. France";
   workbook.created = new Date();
 
   buildMouvementsSheet(workbook, mouvements);
@@ -636,7 +636,7 @@ export async function generateEventArchive(
   demandes: DemandeFacture[] = []
 ): Promise<ExcelJS.Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Caisse événementielle C.A.M.P. France";
+  workbook.creator = "CampSell — C.A.M.P. France";
   workbook.created = new Date();
 
   const valides = allTickets.filter((t) => t.statut === "VALIDE");
