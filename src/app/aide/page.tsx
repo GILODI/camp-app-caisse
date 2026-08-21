@@ -13,7 +13,7 @@ export default function AidePage() {
       </div>
 
       <h1 className="text-2xl font-black">Fiche mémo — Jour J</h1>
-      <p className="-mt-3 text-sm text-black/60">Caisse événementielle C.A.M.P. France</p>
+      <p className="-mt-3 text-sm text-black/60">CampSell — C.A.M.P. France</p>
 
       <Section title="1. Ouvrir l'app sur son téléphone">
         <ol className="list-decimal space-y-1 pl-5">
@@ -22,7 +22,7 @@ export default function AidePage() {
             Menu de partage (iPhone) ou menu ⋮ (Android) → <strong>« Ajouter à l&apos;écran d&apos;accueil »</strong>.
           </li>
           <li>
-            Une icône « Caisse_événement » apparaît sur l&apos;écran d&apos;accueil, comme une vraie application.
+            Une icône « CampSell » apparaît sur l&apos;écran d&apos;accueil, comme une vraie application.
           </li>
         </ol>
       </Section>
