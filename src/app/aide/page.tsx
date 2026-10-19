@@ -143,6 +143,12 @@ export default function AidePage() {
             dans les exports.
           </li>
           <li>
+            <strong>Vérifier qu&apos;aucune vente n&apos;est en attente.</strong>{" "}
+            Aucun téléphone ne doit afficher « Envoi en cours… ». Une vente encaissée hors ligne est datée de son
+            encaissement, pas de sa transmission : elle peut arriver après coup sur la journée concernée. Si
+            c&apos;est le cas après un export, le refaire.
+          </li>
+          <li>
             <strong>Clôturer.</strong>{" "}
             Admin → Clôtures : chaque journée de vente, puis l&apos;événement. Une journée clôturée est
             définitivement figée — plus aucun ticket ne peut y être ajouté, corrigé ou annulé. C&apos;est ce qui

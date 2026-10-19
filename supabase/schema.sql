@@ -97,6 +97,10 @@ create table if not exists public.tickets (
   -- Identifiant unique de la vente, fixé par le téléphone avant le premier
   -- envoi : permet à create_ticket_idempotent de reconnaître un renvoi.
   client_ref uuid,
+  -- Heure réelle de l'encaissement (envoyée par le téléphone), distincte de
+  -- created_at = heure d'enregistrement par le serveur. Null si absente ou
+  -- jugée non fiable (voir create_ticket). C'est elle qui détermine vente_date.
+  vendu_le timestamptz,
   created_at timestamptz not null default now(),
   unique (event_id, vente_date, numero)
 );
@@ -334,14 +338,17 @@ create or replace function public.create_ticket(
   p_vendeur text,
   p_mode_paiement text,
   p_items jsonb,
-  p_remplace_ticket_id uuid default null
+  p_remplace_ticket_id uuid default null,
+  p_vendu_le timestamptz default null
 )
 returns table (id uuid, numero integer, vente_date date, total_ttc numeric)
 language plpgsql
 set search_path = public, pg_temp
 as $$
 declare
+  v_aujourdhui date := (now() at time zone 'Europe/Paris')::date;
   v_vente_date date := (now() at time zone 'Europe/Paris')::date;
+  v_vendu_le timestamptz := null;
   v_numero integer;
   v_ticket_id uuid;
   v_total numeric(10,2);
@@ -349,6 +356,24 @@ declare
 begin
   if jsonb_array_length(p_items) = 0 then
     raise exception 'Un ticket doit contenir au moins une ligne';
+  end if;
+
+  -- Date de la vente : l'heure réelle de l'encaissement si elle est plausible
+  -- (moins de 48 h, pas dans le futur), sinon l'heure de réception.
+  if p_vendu_le is not null
+     and p_vendu_le >= now() - interval '48 hours'
+     and p_vendu_le <= now() + interval '5 minutes' then
+    v_vendu_le := p_vendu_le;
+    v_vente_date := (p_vendu_le at time zone 'Europe/Paris')::date;
+
+    -- Journée de la vente déjà clôturée : on ne la rouvre jamais. La vente
+    -- est enregistrée à la date du jour ; vendu_le garde l'heure réelle.
+    if exists (
+      select 1 from public.clotures
+      where event_id = p_event_id and type = 'jour' and periode = v_vente_date
+    ) then
+      v_vente_date := v_aujourdhui;
+    end if;
   end if;
 
   if exists (
@@ -364,8 +389,8 @@ begin
 
   v_numero := public.next_ticket_number(p_event_id, v_vente_date);
 
-  insert into public.tickets (event_id, numero, vente_date, vendeur, mode_paiement, total_ttc, remplace_ticket_id)
-  values (p_event_id, v_numero, v_vente_date, p_vendeur, p_mode_paiement, v_total, p_remplace_ticket_id)
+  insert into public.tickets (event_id, numero, vente_date, vendeur, mode_paiement, total_ttc, remplace_ticket_id, vendu_le)
+  values (p_event_id, v_numero, v_vente_date, p_vendeur, p_mode_paiement, v_total, p_remplace_ticket_id, v_vendu_le)
   returning tickets.id into v_ticket_id;
 
   for v_item in select * from jsonb_array_elements(p_items)
@@ -398,7 +423,8 @@ create or replace function public.create_ticket_idempotent(
   p_event_id uuid,
   p_vendeur text,
   p_mode_paiement text,
-  p_items jsonb
+  p_items jsonb,
+  p_vendu_le timestamptz default null
 )
 returns table (id uuid, numero integer, vente_date date, total_ttc numeric)
 language plpgsql
@@ -411,8 +437,6 @@ begin
     raise exception 'Référence de vente requise';
   end if;
 
-  -- Sérialise les appels portant la MÊME référence (renvoi arrivant alors que
-  -- la requête d'origine est encore en cours). Libéré en fin de transaction.
   perform pg_advisory_xact_lock(hashtextextended(p_client_ref::text, 0));
 
   select t.id, t.numero, t.vente_date, t.total_ttc
@@ -421,9 +445,6 @@ begin
    where t.event_id = p_event_id
      and t.client_ref = p_client_ref;
 
-  -- Vente déjà enregistrée : on renvoie le ticket existant. Ce contrôle passe
-  -- AVANT la garde de clôture de create_ticket, volontairement — un renvoi
-  -- tardif d'une vente déjà acceptée doit rester inoffensif.
   if found then
     return query select v_ticket.id, v_ticket.numero, v_ticket.vente_date, v_ticket.total_ttc;
     return;
@@ -431,7 +452,13 @@ begin
 
   select c.id, c.numero, c.vente_date, c.total_ttc
     into v_ticket
-    from public.create_ticket(p_event_id, p_vendeur, p_mode_paiement, p_items) as c;
+    from public.create_ticket(
+      p_event_id => p_event_id,
+      p_vendeur => p_vendeur,
+      p_mode_paiement => p_mode_paiement,
+      p_items => p_items,
+      p_vendu_le => p_vendu_le
+    ) as c;
 
   update public.tickets t
      set client_ref = p_client_ref

@@ -84,7 +84,14 @@ class TicketQueue {
     // conservé tel quel à chaque renvoi. Si le serveur a enregistré la vente
     // mais que la confirmation s'est perdue en route, le renvoi retrouve ce
     // ticket au lieu d'en créer un second (chiffre d'affaires doublé).
-    const payload: NewTicketPayload = { ...rawPayload, client_ref: rawPayload.client_ref ?? crypto.randomUUID() };
+    // De même pour l'heure : c'est celle de la validation, jamais celle d'un
+    // renvoi, sinon une vente encaissée à 23h50 hors ligne serait datée du
+    // lendemain matin.
+    const payload: NewTicketPayload = {
+      ...rawPayload,
+      client_ref: rawPayload.client_ref ?? crypto.randomUUID(),
+      vendu_le: rawPayload.vendu_le ?? new Date().toISOString(),
+    };
     try {
       const result = await this.send(payload);
       return { status: "ok", result };
@@ -130,14 +137,20 @@ class TicketQueue {
     return res.json();
   }
 
-  // Tickets mis en file avant l'introduction de client_ref : on leur en
-  // attribue une maintenant, et on l'enregistre AVANT l'envoi pour qu'une
-  // tentative ultérieure la réutilise au lieu d'en générer une nouvelle.
-  private ensureClientRef(item: QueuedTicket): QueuedTicket {
-    if (item.payload.client_ref) return item;
+  // Tickets mis en file avant l'introduction de client_ref / vendu_le : on les
+  // complète maintenant, et on l'enregistre AVANT l'envoi pour qu'une tentative
+  // ultérieure réutilise les mêmes valeurs au lieu d'en générer de nouvelles.
+  // L'heure de la vente est celle où le ticket est entré dans la file : c'est
+  // la meilleure information disponible, et elle date bien de la vente.
+  private ensureStamps(item: QueuedTicket): QueuedTicket {
+    if (item.payload.client_ref && item.payload.vendu_le) return item;
     const upgraded: QueuedTicket = {
       ...item,
-      payload: { ...item.payload, client_ref: crypto.randomUUID() },
+      payload: {
+        ...item.payload,
+        client_ref: item.payload.client_ref ?? crypto.randomUUID(),
+        vendu_le: item.payload.vendu_le ?? new Date(item.createdAt).toISOString(),
+      },
     };
     this.write(this.read().map((q) => (q.localId === item.localId ? upgraded : q)));
     return upgraded;
@@ -160,7 +173,7 @@ class TicketQueue {
     }
 
     for (const queued of queue) {
-      const item = this.ensureClientRef(queued);
+      const item = this.ensureStamps(queued);
       try {
         const result = await this.send(item.payload);
         const remaining = this.read().filter((q) => q.localId !== item.localId);

@@ -112,13 +112,32 @@ sur `create_ticket` si `create_ticket_idempotent` est introuvable (erreur
 PostgREST `PGRST202`) pour ne pas arrêter les ventes — mais sans protection
 contre les doublons, d'où un `console.warn` dans les journaux Vercel.
 
-**Limites connues de la file hors-ligne, non corrigées :** la date de vente
-est celle de la *transmission* (`now()` côté serveur), pas celle de la vente
-— un ticket encaissé à 23h50 hors ligne et transmis le lendemain porte la
-date du lendemain. Et toute erreur renvoyée par le serveur (HTTP 500), y
-compris une erreur métier comme une journée clôturée, est traitée comme une
-panne réseau : la vente est renvoyée indéfiniment sans que le vendeur en
-voie la cause.
+**La date d'un ticket est celle de la vente, pas celle de la transmission.**
+Le téléphone envoie `vendu_le` (heure de validation, fixée avant le premier
+envoi comme `client_ref` et jamais refaite au renvoi) ; `create_ticket` en
+déduit `vente_date` (fuseau Europe/Paris). `tickets.created_at` reste l'heure
+d'enregistrement par le serveur — ne pas confondre : l'affichage et le reçu PDF
+utilisent `vendu_le ?? created_at`. Deux garde-fous dans `create_ticket` :
+- `vendu_le` n'est retenu que s'il date de moins de 48 h et n'est pas dans le
+  futur (5 min de tolérance) ; sinon il est ignoré et la vente prend la date du
+  jour. L'horloge d'un téléphone n'est pas fiable.
+- si la journée de la vente est **déjà clôturée**, elle n'est jamais rouverte :
+  la vente est enregistrée à la date du jour et `vendu_le` garde l'heure réelle
+  (l'écart `date(vendu_le) ≠ vente_date` est la trace). Choix délibéré : refuser
+  la vente la perdrait alors que l'argent est encaissé.
+Conséquence d'exploitation : une vente tardive peut apparaître sur une journée
+déjà exportée. Avant de clôturer, vérifier qu'aucun téléphone n'a de vente en
+attente, et ré-exporter si une vente est arrivée après l'export.
+
+**Limite connue de la file hors-ligne, non corrigée :** toute erreur renvoyée
+par le serveur (HTTP 500), y compris une erreur métier comme une journée
+clôturée, est traitée comme une panne réseau : la vente est renvoyée
+indéfiniment sans que le vendeur en voie la cause.
+
+**Changer la signature de `create_ticket` ou `create_ticket_idempotent` :**
+voir `supabase/migration_vente_date_reelle.sql` pour le modèle à suivre — suppression
+explicite des anciennes signatures dans la même transaction, puis contrôle final
+qui annule tout s'il reste plus d'une version.
 
 **Les routes de vente n'étaient pas protégées jusqu'au 28/07/2026.**
 Le middleware (`src/middleware.ts`) ne couvre que `/admin/*`. Les routes

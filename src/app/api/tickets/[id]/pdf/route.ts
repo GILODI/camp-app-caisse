@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: ticket, error: ticketError } = await supabaseServer
     .from("tickets")
-    .select("numero, mode_paiement, created_at, event_id, events(nom)")
+    .select("numero, mode_paiement, created_at, vendu_le, event_id, events(nom)")
     .eq("id", id)
     .single();
 
@@ -40,7 +40,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const pdfBuffer = await renderTicketPdf({
     numero: ticket.numero,
-    createdAt: ticket.created_at,
+    // Heure réelle de la vente quand elle est connue : un reçu renvoyé après
+    // coup doit porter l'heure de l'encaissement, pas celle de la transmission.
+    createdAt: ticket.vendu_le ?? ticket.created_at,
     modePaiement: ticket.mode_paiement,
     items: (items ?? []) as TicketItem[],
     eventNom: eventNomStr ?? "",

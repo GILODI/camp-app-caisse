@@ -86,6 +86,12 @@ export interface Ticket {
   cancelled_at: string | null;
   cancelled_by: string | null;
   remplace_ticket_id: string | null;
+  // Heure réelle de l'encaissement, envoyée par le téléphone. Distincte de
+  // created_at, qui est l'heure d'enregistrement par le serveur : pour une
+  // vente faite hors ligne puis transmise plus tard, les deux diffèrent.
+  // Null pour les tickets antérieurs, ou si l'heure du téléphone a été jugée
+  // non fiable (voir create_ticket).
+  vendu_le: string | null;
   created_at: string;
 }
 
@@ -176,6 +182,10 @@ export interface NewTicketPayload {
   // serveur de reconnaître une vente déjà enregistrée dont seule la
   // confirmation s'est perdue, au lieu d'en créer un doublon.
   client_ref?: string;
+  // Heure réelle de la vente (ISO 8601), fixée au moment où le vendeur valide
+  // le ticket — pas à celui de la transmission, qui peut avoir lieu bien plus
+  // tard si le réseau était coupé. Le serveur en déduit la date de la vente.
+  vendu_le?: string;
   vendeur: string;
   mode_paiement: PaymentMethod;
   items: {
