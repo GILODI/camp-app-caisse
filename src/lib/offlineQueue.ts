@@ -79,7 +79,12 @@ class TicketQueue {
     if (this.read().length > 0) this.ensureRetryLoop();
   }
 
-  async submit(payload: NewTicketPayload): Promise<SubmitOutcome> {
+  async submit(rawPayload: NewTicketPayload): Promise<SubmitOutcome> {
+    // L'identifiant de la vente est fixé ICI, avant le tout premier envoi, puis
+    // conservé tel quel à chaque renvoi. Si le serveur a enregistré la vente
+    // mais que la confirmation s'est perdue en route, le renvoi retrouve ce
+    // ticket au lieu d'en créer un second (chiffre d'affaires doublé).
+    const payload: NewTicketPayload = { ...rawPayload, client_ref: rawPayload.client_ref ?? crypto.randomUUID() };
     try {
       const result = await this.send(payload);
       return { status: "ok", result };
@@ -125,6 +130,19 @@ class TicketQueue {
     return res.json();
   }
 
+  // Tickets mis en file avant l'introduction de client_ref : on leur en
+  // attribue une maintenant, et on l'enregistre AVANT l'envoi pour qu'une
+  // tentative ultérieure la réutilise au lieu d'en générer une nouvelle.
+  private ensureClientRef(item: QueuedTicket): QueuedTicket {
+    if (item.payload.client_ref) return item;
+    const upgraded: QueuedTicket = {
+      ...item,
+      payload: { ...item.payload, client_ref: crypto.randomUUID() },
+    };
+    this.write(this.read().map((q) => (q.localId === item.localId ? upgraded : q)));
+    return upgraded;
+  }
+
   private ensureRetryLoop() {
     if (this.timer) return;
     this.timer = setInterval(() => void this.flush(), RETRY_INTERVAL_MS);
@@ -141,7 +159,8 @@ class TicketQueue {
       return;
     }
 
-    for (const item of queue) {
+    for (const queued of queue) {
+      const item = this.ensureClientRef(queued);
       try {
         const result = await this.send(item.payload);
         const remaining = this.read().filter((q) => q.localId !== item.localId);

@@ -94,12 +94,22 @@ create table if not exists public.tickets (
   cancelled_at timestamptz,
   cancelled_by text,
   remplace_ticket_id uuid references public.tickets(id),
+  -- Identifiant unique de la vente, fixé par le téléphone avant le premier
+  -- envoi : permet à create_ticket_idempotent de reconnaître un renvoi.
+  client_ref uuid,
   created_at timestamptz not null default now(),
   unique (event_id, vente_date, numero)
 );
 
 create index if not exists tickets_event_date_idx on public.tickets (event_id, vente_date);
 create index if not exists tickets_statut_idx on public.tickets (statut);
+
+-- Une même vente (même client_ref) ne peut exister qu'une fois par événement.
+-- Partiel : les tickets sans référence (antérieurs, ou créés par correction)
+-- ne sont pas concernés.
+create unique index if not exists tickets_client_ref_idx
+  on public.tickets (event_id, client_ref)
+  where client_ref is not null;
 
 -- ----------------------------------------------------------------------------
 -- ticket_items : lignes produit d'un ticket.
@@ -373,6 +383,61 @@ begin
   end loop;
 
   return query select v_ticket_id, v_numero, v_vente_date, v_total;
+end;
+$$;
+
+-- Création de ticket IDEMPOTENTE : c'est le chemin normal de l'application
+-- (voir src/app/api/tickets/route.ts). Un renvoi de la même vente — la
+-- confirmation s'est perdue en route, le téléphone réessaie — retrouve le
+-- ticket déjà créé au lieu d'en créer un second.
+-- Fonction distincte de create_ticket (nom différent) : on ne modifie JAMAIS
+-- la signature de create_ticket, une surcharge ambiguë a déjà cassé la
+-- production trois fois.
+create or replace function public.create_ticket_idempotent(
+  p_client_ref uuid,
+  p_event_id uuid,
+  p_vendeur text,
+  p_mode_paiement text,
+  p_items jsonb
+)
+returns table (id uuid, numero integer, vente_date date, total_ttc numeric)
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_ticket record;
+begin
+  if p_client_ref is null then
+    raise exception 'Référence de vente requise';
+  end if;
+
+  -- Sérialise les appels portant la MÊME référence (renvoi arrivant alors que
+  -- la requête d'origine est encore en cours). Libéré en fin de transaction.
+  perform pg_advisory_xact_lock(hashtextextended(p_client_ref::text, 0));
+
+  select t.id, t.numero, t.vente_date, t.total_ttc
+    into v_ticket
+    from public.tickets t
+   where t.event_id = p_event_id
+     and t.client_ref = p_client_ref;
+
+  -- Vente déjà enregistrée : on renvoie le ticket existant. Ce contrôle passe
+  -- AVANT la garde de clôture de create_ticket, volontairement — un renvoi
+  -- tardif d'une vente déjà acceptée doit rester inoffensif.
+  if found then
+    return query select v_ticket.id, v_ticket.numero, v_ticket.vente_date, v_ticket.total_ttc;
+    return;
+  end if;
+
+  select c.id, c.numero, c.vente_date, c.total_ttc
+    into v_ticket
+    from public.create_ticket(p_event_id, p_vendeur, p_mode_paiement, p_items) as c;
+
+  update public.tickets t
+     set client_ref = p_client_ref
+   where t.id = v_ticket.id;
+
+  return query select v_ticket.id, v_ticket.numero, v_ticket.vente_date, v_ticket.total_ttc;
 end;
 $$;
 

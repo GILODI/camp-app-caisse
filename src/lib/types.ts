@@ -171,6 +171,11 @@ export interface DraftLine {
 
 export interface NewTicketPayload {
   event_id: string;
+  // Identifiant unique de CETTE vente, fixé par le téléphone avant le premier
+  // envoi et conservé tel quel à chaque renvoi : c'est ce qui permet au
+  // serveur de reconnaître une vente déjà enregistrée dont seule la
+  // confirmation s'est perdue, au lieu d'en créer un doublon.
+  client_ref?: string;
   vendeur: string;
   mode_paiement: PaymentMethod;
   items: {

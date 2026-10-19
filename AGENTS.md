@@ -88,6 +88,38 @@ function`). Avant de modifier `create_ticket`, `cancel_ticket`,
 qu'une seule signature existe en base, et fournir un `drop function`
 explicite de l'ancienne si le nombre ou l'ordre des paramètres change.
 
+**La création de ticket est idempotente.** `/api/tickets` appelle
+`create_ticket_idempotent` (et non `create_ticket` directement) avec un
+`client_ref` généré par le téléphone avant le premier envoi
+(`src/lib/offlineQueue.ts`). Sans cela, une confirmation perdue en route
+faisait renvoyer la vente par la file d'attente hors-ligne, et le serveur
+créait un second ticket : chiffre d'affaires et stock comptés deux fois,
+sans que personne le voie. À ne pas casser :
+- le `client_ref` doit être fixé **avant** le premier envoi puis conservé
+  tel quel à chaque renvoi ;
+- `create_ticket_idempotent` enveloppe `create_ticket` sans en modifier la
+  signature — ne jamais changer celle de `create_ticket`, voir plus haut ;
+- les corrections (`correct_ticket`) ne passent pas par ce chemin : elles ne
+  sont pas mises en file, une erreur s'affiche directement au vendeur.
+Sa logique SQL a été vérifiée sur un vrai moteur Postgres (pglite, en
+mémoire) : un renvoi retrouve le ticket existant, y compris après clôture de
+la journée ; l'index unique `tickets_client_ref_idx` fait office de filet.
+
+**Ordre de déploiement quand le code dépend d'une nouvelle fonction SQL :**
+exécuter la migration **avant** de fusionner (une migration additive est sans
+risque pour l'ancien code), puis fusionner. La route `/api/tickets` retombe
+sur `create_ticket` si `create_ticket_idempotent` est introuvable (erreur
+PostgREST `PGRST202`) pour ne pas arrêter les ventes — mais sans protection
+contre les doublons, d'où un `console.warn` dans les journaux Vercel.
+
+**Limites connues de la file hors-ligne, non corrigées :** la date de vente
+est celle de la *transmission* (`now()` côté serveur), pas celle de la vente
+— un ticket encaissé à 23h50 hors ligne et transmis le lendemain porte la
+date du lendemain. Et toute erreur renvoyée par le serveur (HTTP 500), y
+compris une erreur métier comme une journée clôturée, est traitée comme une
+panne réseau : la vente est renvoyée indéfiniment sans que le vendeur en
+voie la cause.
+
 **Les routes de vente n'étaient pas protégées jusqu'au 28/07/2026.**
 Le middleware (`src/middleware.ts`) ne couvre que `/admin/*`. Les routes
 `/api/tickets/*` sont protégées par `src/lib/eventAuth.ts`
