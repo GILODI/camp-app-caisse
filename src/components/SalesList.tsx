@@ -60,7 +60,7 @@ export function SalesList({
                   </p>
                   <p className="text-xs text-black/50">
                     {ticket.vendeur} · {labelByMethod.get(ticket.mode_paiement)} ·{" "}
-                    {formatDateTimeFR(ticket.created_at)}
+                    {formatDateTimeFR(ticket.vendu_le ?? ticket.created_at)}
                   </p>
                 </div>
                 <p className="text-lg font-bold">{Number(ticket.total_ttc).toFixed(2)} €</p>
