@@ -358,6 +358,14 @@ begin
     raise exception 'Un ticket doit contenir au moins une ligne';
   end if;
 
+  -- Événement clôturé : plus aucun ticket, sur aucun jour.
+  if exists (
+    select 1 from public.clotures
+    where event_id = p_event_id and type = 'evenement'
+  ) then
+    raise exception 'Événement déjà clôturé : impossible d''ajouter ou de corriger un ticket';
+  end if;
+
   -- Date de la vente : l'heure réelle de l'encaissement si elle est plausible
   -- (moins de 48 h, pas dans le futur), sinon l'heure de réception.
   if p_vendu_le is not null
@@ -479,6 +487,17 @@ language plpgsql
 set search_path = public, pg_temp
 as $$
 begin
+  -- Événement clôturé : plus aucune annulation. Couvre aussi
+  -- admin_correct_ticket, qui passe par ici avant de réinsérer.
+  if exists (
+    select 1 from public.tickets t
+    join public.clotures c
+      on c.event_id = t.event_id and c.type = 'evenement'
+    where t.id = p_ticket_id
+  ) then
+    raise exception 'Événement déjà clôturé : impossible d''annuler ce ticket';
+  end if;
+
   if exists (
     select 1 from public.tickets t
     join public.clotures c

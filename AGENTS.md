@@ -111,11 +111,11 @@ protéger (retirer une condition, inverser un signe) et constater que le test
 échoue. Un test jamais vu échouer ne prouve rien. Le 19/10/2026, 17 défauts
 volontaires sur 17 ont été détectés ainsi.
 
-**Défaut connu, documenté par `it.fails` dans `tests/sql/cloture.test.ts` :**
-après `close_event`, `create_ticket` accepte encore une vente datée d'un jour
-sans clôture de jour — la clôture d'événement ne fige donc pas réellement
-l'événement. Le jour où c'est corrigé, ce test passera au rouge : retirer alors
-`.fails`.
+**`tests/sql/migration-cloture-evenement.test.ts` est un test de transition :**
+il rejoue la migration sur le `schema.sql` de `master` (l'état de production).
+Une fois la migration exécutée et fusionnée, `master` porte déjà le correctif :
+le test « avant migration » s'affiche alors comme ignoré. Supprimer ce fichier à
+ce moment-là — `tests/sql/cloture.test.ts` protège le comportement durablement.
 
 ## Pièges déjà rencontrés
 
@@ -223,3 +223,18 @@ définitivement une journée de vente : au-delà, plus aucun ticket ne peut y
 calculée sur l'ensemble des tickets de la période. Ne jamais affaiblir ce
 verrou pour "faciliter" une correction — la procédure prévue est de
 corriger avant clôture (voir Admin → Corriger un ticket passé).
+
+**La clôture d'ÉVÉNEMENT fige tout l'événement, sur tous les jours.** Avant
+`migration_cloture_evenement.sql`, `create_ticket` ne contrôlait que les
+clôtures de jour : une vente datée d'un jour sans clôture était acceptée après
+`close_event`, et le nombre de tickets figé ne correspondait plus à la base.
+Désormais `create_ticket` et `cancel_ticket` refusent dès qu'une clôture
+d'événement existe. `correct_ticket` et `admin_correct_ticket` sont couvertes
+indirectement : elles appellent `cancel_ticket` avant d'écrire. **Toute nouvelle
+fonction qui écrit ou modifie des tickets doit refuser sur événement clôturé et
+sur journée clôturée** — et avoir son test dans `tests/sql/cloture.test.ts`.
+La garde d'événement dans `cancel_ticket` n'est testable qu'avec un ticket
+« orphelin » inséré directement (jour sans clôture, événement clôturé) : sinon la
+garde de jour refuse à sa place et la garde d'événement n'est jamais sollicitée.
+Constat du 21/10/2026 : aucune clôture n'existait encore en production, le défaut
+n'a donc touché aucune donnée réelle.
