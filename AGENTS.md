@@ -68,13 +68,54 @@ d'authentification Supabase — ce n'est pas un bug du code. En pratique :
 
 - Le flux vendeur complet (code d'accès → vente → ticket) ne peut pas
   s'exécuter de bout en bout en local.
-- Pour vérifier la logique de calcul (exports Excel, totaux, etc.), écrire
-  un script autonome avec `npx tsx` qui appelle directement les fonctions
-  de `src/lib/` avec des données synthétiques, plutôt que de passer par le
-  serveur de dev.
+- Pour vérifier la logique de calcul ou le SQL, ne pas passer par le serveur
+  de dev : écrire ou compléter un test (voir « Tests automatiques » ci-dessous).
 - Pour vérifier un comportement serveur réel, le faire directement contre
   la production après fusion (curl, ou le SQL Editor Supabase), jamais en
-  écrivant de fausses données de vente sur un événement réel.
+  écrivant de fausses données de vente sur un événement réel — uniquement
+  sur l'événement marqué `is_test` (« Event test »), avec l'accord d'Alex.
+
+## Tests automatiques
+
+`npm test` (Vitest) lance toute la suite en quelques secondes, **sans réseau
+et sans toucher à la production**. **À lancer avant chaque fusion**, avec
+`npm run build` et `npm run lint`. Pas de test qui échoue « parce qu'on verra
+plus tard » : soit on corrige, soit on documente le défaut (voir `it.fails`).
+
+- `tests/sql/*.test.ts` : les VRAIES fonctions SQL, exécutées dans un vrai
+  Postgres en mémoire (`@electric-sql/pglite`) qui charge le `supabase/schema.sql`
+  complet. Création idempotente, date de vente, clôtures, vidage des données de
+  test, et garde-fous généraux : aucune fonction en plusieurs versions, tous les
+  `search_path` figés. `tests/helpers/db.ts` fournit les outils communs.
+- `src/lib/offlineQueue.test.ts` : la file d'attente du téléphone (renvois,
+  référence et heure de vente stables, refus temporaires).
+- `src/app/api/tickets/route.test.ts` : validation et chaîne de repli de la
+  route de vente — notamment qu'aucune erreur autre que « fonction absente » ne
+  déclenche de nouvelle tentative (risque de double création).
+- `src/lib/excelExport.test.ts`, `caisseCalc.test.ts`, `stock.test.ts` : les
+  calculs qui alimentent la comptabilité.
+
+**Ce que ces tests ne couvrent pas :** les écrans (aucun test d'interface), une
+vraie coupure réseau sur un vrai téléphone, et deux requêtes réellement
+simultanées (Postgres en mémoire = une seule connexion ; le verrou
+`pg_advisory_xact_lock` de `create_ticket_idempotent` repose sur le
+comportement documenté de Postgres).
+
+**Quand on change `supabase/schema.sql`**, rien d'autre à faire : les tests
+rechargent le fichier. Mais une migration à exécuter en production doit aussi
+être reportée dans `schema.sql`, sinon les tests valident un schéma différent
+de la production.
+
+**Vérifier qu'un test protège vraiment :** casser volontairement le code à
+protéger (retirer une condition, inverser un signe) et constater que le test
+échoue. Un test jamais vu échouer ne prouve rien. Le 19/10/2026, 17 défauts
+volontaires sur 17 ont été détectés ainsi.
+
+**Défaut connu, documenté par `it.fails` dans `tests/sql/cloture.test.ts` :**
+après `close_event`, `create_ticket` accepte encore une vente datée d'un jour
+sans clôture de jour — la clôture d'événement ne fige donc pas réellement
+l'événement. Le jour où c'est corrigé, ce test passera au rouge : retirer alors
+`.fails`.
 
 ## Pièges déjà rencontrés
 
