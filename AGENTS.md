@@ -117,6 +117,37 @@ Une fois la migration exécutée et fusionnée, `master` porte déjà le correct
 le test « avant migration » s'affiche alors comme ignoré. Supprimer ce fichier à
 ce moment-là — `tests/sql/cloture.test.ts` protège le comportement durablement.
 
+## Dépendances et sécurité des paquets
+
+`next` et `eslint-config-next` sont **épinglés à une version exacte** (sans `^`)
+et doivent rester **à la même version**. `npm install next@X` réécrit l'épinglage
+en plage : utiliser `npm install --save-exact next@X eslint-config-next@X`.
+
+**Après toute mise à jour de `next`**, ne pas se contenter du build : il ne prouve
+pas que `@react-pdf/renderer` (reçus) et `exceljs` (exports) fonctionnent encore
+une fois empaquetés. Vérifier sur le build de production (`npm run build` puis
+`npx next start`) à l'aide d'une route temporaire, jamais commitée, qui appelle
+`renderTicketPdf` et `generateDailyExport` avec des données fictives ; contrôler
+aussi que `/admin/*` redirige toujours vers la connexion (le middleware est la
+seule protection des pages admin) et que les routes `/api/*` sensibles
+répondent 401 sans authentification.
+
+`npm audit --omit=dev` : le 21/10/2026, `next` 16.2.10 → 16.4.2 a fait passer les
+vulnérabilités de production de 7 (dont 1 critique) à 4 (aucune critique).
+Reste, analysé et volontairement laissé :
+- `exceljs` / `uuid` : le correctif proposé par npm est un **retour à exceljs
+  3.4.0** (une régression). `exceljs` n'appelle `uuid` que par `v4()` sans tampon,
+  alors que l'avis vise v3/v5/v6 avec un tampon fourni.
+- `brace-expansion` : tiré par `glob` via `exceljs` → `archiver`, sans motif
+  contrôlé par un utilisateur.
+- `baseline-browser-mapping` : dépendance de `next` utilisée à la construction.
+À réévaluer à chaque mise à jour d'`exceljs`.
+
+Le fichier `src/middleware.ts` est signalé obsolète par Next.js (convention
+renommée `proxy`). Sans conséquence aujourd'hui ; migration automatique possible
+avec `npx @next/codemod@canary middleware-to-proxy .` — à faire sur une branche,
+puis revérifier la protection de `/admin/*` comme ci-dessus.
+
 ## Pièges déjà rencontrés
 
 **L'ambiguïté de fonction SQL a cassé la production trois fois.**
