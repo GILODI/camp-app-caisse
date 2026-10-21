@@ -1,4 +1,5 @@
 import type { PGlite } from "@electric-sql/pglite";
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LIGNES, compter, createDb, decale, newEvent, reperes, ticketEnBase, vendre } from "../helpers/db";
 
@@ -145,25 +146,181 @@ describe("clôtures : journées figées", () => {
       expect(c.rows[0].nb_tickets).toBe(1);
     });
 
-    // DÉFAUT CONNU, constaté le 19/10/2026 — voir AGENTS.md. create_ticket ne
-    // contrôle que les clôtures de JOUR : une fois l'événement clôturé, une vente
-    // datée d'un jour sans clôture est encore acceptée, et le nombre de tickets
-    // figé par la clôture ne correspond plus à la base.
-    //
-    // Ce test décrit le comportement ATTENDU. `it.fails` le fait passer tant que
-    // le défaut existe ; le jour où il sera corrigé, il passera au rouge et
-    // demandera de retirer `.fails` — il ne peut donc pas rester oublié.
-    it.fails("après la clôture de l'événement, plus aucune vente n'est acceptée", async () => {
-      const ev = await newEvent(db);
-      const { aujourdhui, hier2350 } = await reperes(db);
-      await vendre(db, ev);
-      await cloturerJour(ev, aujourdhui);
-      await db.query("select * from public.close_event($1::uuid, 'Alex')", [ev]);
+    // Ancien défaut (constaté le 19/10/2026, corrigé par migration_cloture_evenement) :
+    // create_ticket ne contrôlait que les clôtures de JOUR. Une vente datée d'un
+    // jour sans clôture était donc acceptée après la clôture de l'événement, et le
+    // nombre de tickets figé par la clôture ne correspondait plus à la base.
+    describe("après la clôture de l'événement, plus rien ne s'écrit, sur aucun jour", () => {
+      // Événement clôturé, avec UNE vente aujourd'hui. Hier n'a jamais eu de
+      // clôture de jour : c'est le cas qui échappait au contrôle.
+      async function evenementCloture() {
+        const ev = await newEvent(db);
+        const { aujourdhui } = await reperes(db);
+        const vente = await vendre(db, ev);
+        await cloturerJour(ev, aujourdhui);
+        await db.query("select * from public.close_event($1::uuid, 'Alex')", [ev]);
+        return { ev, vente };
+      }
+      const ticketsEnBase = (ev: string) =>
+        compter(db, "select 1 from public.tickets where event_id = $1", [ev]);
 
-      // Hier n'a jamais été clôturé : c'est la brèche.
-      await expect(vendre(db, ev, { venduLe: hier2350 })).rejects.toThrow();
-      expect(await compter(db, "select 1 from public.tickets where event_id = $1", [ev])).toBe(1);
+      it("une vente datée d'un jour sans clôture est refusée, et rien n'est écrit", async () => {
+        const { ev } = await evenementCloture();
+        const { hier2350 } = await reperes(db);
+
+        await expect(vendre(db, ev, { venduLe: hier2350 })).rejects.toThrow(/Événement déjà clôturé/);
+        expect(await ticketsEnBase(ev)).toBe(1);
+      });
+
+      it("une vente sans heure (envoyée par un ancien téléphone) est refusée aussi", async () => {
+        const { ev } = await evenementCloture();
+        await expect(vendre(db, ev)).rejects.toThrow(/déjà clôtur/);
+        expect(await ticketsEnBase(ev)).toBe(1);
+      });
+
+      it("le compteur de numérotation n'avance pas sur une vente refusée", async () => {
+        const { ev } = await evenementCloture();
+        const { hier2350, hier } = await reperes(db);
+        await expect(vendre(db, ev, { venduLe: hier2350 })).rejects.toThrow();
+
+        expect(await compter(db, "select 1 from public.ticket_counters where event_id = $1 and vente_date = $2::date", [ev, hier])).toBe(0);
+      });
+
+      it("la création classique (ancien code, sans référence) est refusée aussi", async () => {
+        const { ev } = await evenementCloture();
+        await expect(
+          db.query("select * from public.create_ticket($1::uuid, 'A', 'CB', $2::jsonb)", [ev, JSON.stringify(LIGNES)])
+        ).rejects.toThrow(/Événement déjà clôturé/);
+        expect(await ticketsEnBase(ev)).toBe(1);
+      });
+
+      it("l'annulation d'un ticket est refusée", async () => {
+        const { vente } = await evenementCloture();
+        await expect(
+          db.query("select public.cancel_ticket($1::uuid, 'Trop tard', 'Alex')", [vente.id])
+        ).rejects.toThrow(/déjà clôtur/);
+        expect((await ticketEnBase(db, vente.id)).statut).toBe("VALIDE");
+      });
+
+      it("la correction par le vendeur est refusée, sans annuler l'ancien ticket", async () => {
+        const { ev, vente } = await evenementCloture();
+        await expect(
+          db.query("select * from public.correct_ticket($1::uuid, $2::uuid, 'A', 'CB', $3::jsonb, 'A')", [
+            vente.id,
+            ev,
+            JSON.stringify(LIGNES),
+          ])
+        ).rejects.toThrow(/déjà clôtur/);
+        expect((await ticketEnBase(db, vente.id)).statut).toBe("VALIDE");
+        expect(await ticketsEnBase(ev)).toBe(1);
+      });
+
+      it("la correction par l'administrateur est refusée aussi (elle insère directement, sans create_ticket)", async () => {
+        const { ev, vente } = await evenementCloture();
+        await expect(
+          db.query("select * from public.admin_correct_ticket($1::uuid, 'A', 'CB', $2::jsonb, 'Alex')", [
+            vente.id,
+            JSON.stringify(LIGNES),
+          ])
+        ).rejects.toThrow(/déjà clôtur/);
+        expect((await ticketEnBase(db, vente.id)).statut).toBe("VALIDE");
+        expect(await ticketsEnBase(ev)).toBe(1);
+      });
+
+      // Cas des données créées PAR L'ANCIEN DÉFAUT : un ticket vendu après la clôture
+      // de l'événement, sur un jour qui n'a jamais eu de clôture de jour. Il n'est
+      // protégé que par la clôture d'événement, c'est ce qui rend cette garde
+      // nécessaire en plus de celle des jours. On le fabrique par insertion directe,
+      // puisque create_ticket refuse désormais de le créer.
+      describe("ticket « orphelin » : sur un jour sans clôture, dans un événement clôturé", () => {
+        async function evenementAvecOrphelin() {
+          const { ev } = await evenementCloture();
+          const { hier } = await reperes(db);
+          const orphelin = await db.query<{ id: string }>(
+            `insert into public.tickets (event_id, numero, vente_date, vendeur, mode_paiement, total_ttc)
+             values ($1, 1, $2::date, 'A', 'CB', 10) returning id`,
+            [ev, hier]
+          );
+          await db.query(
+            `insert into public.ticket_items (ticket_id, reference, designation, prix_unitaire, quantite)
+             values ($1, 'R', 'D', 10, 1)`,
+            [orphelin.rows[0].id]
+          );
+          return { ev, id: orphelin.rows[0].id, hier };
+        }
+
+        it("la garde de jour ne le protège pas : il n'existe aucune clôture pour ce jour", async () => {
+          const { ev, hier } = await evenementAvecOrphelin();
+          expect(await compter(db, "select 1 from public.clotures where event_id = $1 and type = 'jour' and periode = $2::date", [ev, hier])).toBe(0);
+        });
+
+        it("son annulation est refusée par la clôture d'événement", async () => {
+          const { id } = await evenementAvecOrphelin();
+          await expect(
+            db.query("select public.cancel_ticket($1::uuid, 'Tentative', 'Alex')", [id])
+          ).rejects.toThrow(/Événement déjà clôturé/);
+          expect((await ticketEnBase(db, id)).statut).toBe("VALIDE");
+        });
+
+        it("sa correction par l'administrateur est refusée aussi", async () => {
+          const { ev, id } = await evenementAvecOrphelin();
+          await expect(
+            db.query("select * from public.admin_correct_ticket($1::uuid, 'A', 'CB', $2::jsonb, 'Alex')", [id, JSON.stringify(LIGNES)])
+          ).rejects.toThrow(/Événement déjà clôturé/);
+          expect((await ticketEnBase(db, id)).statut).toBe("VALIDE");
+          expect(await ticketsEnBase(ev)).toBe(2); // la vente d'origine + l'orphelin, rien de plus
+        });
+
+        it("rien n'est supprimé : le ticket orphelin reste en base, intact", async () => {
+          const { id } = await evenementAvecOrphelin();
+          expect((await ticketEnBase(db, id)).statut).toBe("VALIDE");
+        });
+      });
+
+      it("le renvoi d'une vente DÉJÀ acceptée reste inoffensif (il retrouve le ticket, sans erreur)", async () => {
+        const ev = await newEvent(db);
+        const { aujourdhui } = await reperes(db);
+        const ref = randomUUID();
+        const premier = await vendre(db, ev, { ref });
+        await cloturerJour(ev, aujourdhui);
+        await db.query("select * from public.close_event($1::uuid, 'Alex')", [ev]);
+
+        const renvoi = await vendre(db, ev, { ref });
+        expect(renvoi.id).toBe(premier.id);
+        expect(await ticketsEnBase(ev)).toBe(1);
+      });
+
+      it("le nombre de tickets figé par la clôture correspond toujours à la base", async () => {
+        const { ev } = await evenementCloture();
+        const { hier2350 } = await reperes(db);
+        await expect(vendre(db, ev, { venduLe: hier2350 })).rejects.toThrow();
+
+        const figes = await db.query<{ nb_tickets: number }>(
+          "select nb_tickets from public.clotures where event_id = $1 and type = 'evenement'",
+          [ev]
+        );
+        expect(figes.rows[0].nb_tickets).toBe(await ticketsEnBase(ev));
+      });
+
+      it("ne concerne que l'événement clôturé : un autre événement continue de vendre normalement", async () => {
+        const { hier2350 } = await reperes(db);
+        await evenementCloture();
+        const autre = await newEvent(db);
+
+        const v = await vendre(db, autre, { venduLe: hier2350 });
+        expect(v.numero).toBe(1);
+      });
     });
+  });
+
+  it("un événement non clôturé se comporte exactement comme avant (rien n'est bloqué par erreur)", async () => {
+    const ev = await newEvent(db);
+    const { aujourdhui, hier2350 } = await reperes(db);
+    await vendre(db, ev);
+    await cloturerJour(ev, aujourdhui); // journée du jour clôturée, mais PAS l'événement
+
+    const v = await vendre(db, ev, { venduLe: hier2350 });
+    expect(v.numero).toBe(1);
   });
 
   it("(contrôle) une heure de vente trop ancienne n'ouvre pas de brèche sur une journée clôturée", async () => {
