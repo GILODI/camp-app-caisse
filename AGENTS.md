@@ -34,7 +34,8 @@ pas un prototype : les bugs ont un coût réel, et rien n'est jamais
   hors-ligne (`src/lib/offlineQueue.ts`) : un ticket créé sans réseau est
   conservé localement et renvoyé automatiquement à la reconnexion.
 - **Trois niveaux d'accès distincts**, à ne pas confondre :
-  - vendeur → code d'accès de l'événement (ex. `TEST26`), par téléphone
+  - vendeur → code d'accès de l'événement (6 caractères, propre à chaque
+    événement), par téléphone
   - admin appli → mot de passe unique (`ADMIN_PASSWORD`), page `/admin`
   - comptes techniques (GitHub, Vercel, Supabase) → 2FA activée sur les
     trois, sans rapport avec les deux niveaux précédents
